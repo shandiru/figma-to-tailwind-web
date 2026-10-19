@@ -1,0 +1,27 @@
+{
+  "name": "figma-to-tailwind-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "fzstd": "0.1.1",
+    "helmet": "^7.1.0",
+    "kiwi-schema": "0.5.0",
+    "mongoose": "^8.5.1",
+    "multer": "^1.4.5-lts.1",
+    "sharp": "^0.33.4"
+  }
+}
