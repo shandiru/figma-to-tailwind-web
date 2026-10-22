@@ -57,7 +57,7 @@ if (verifyFonts) {
   console.log('Bundled exported Google fonts for the visual check.');
 }
 html = html.replace(/<link\b[^>]*fonts\.googleapis\.com[^>]*>/gi, '');
-html = html.replace(/<script[^>]*src="https:\/\/cdn.tailwindcss.com"[^>]*><\/script>/, '').replace('</head>', `<style>${compiled.css}\n${fontCss}</style></head>`);
+html = html.replace(/<script[^>]*src="https:\/\/cdn.tailwindcss.com"[^>]*><\/script>/, '').replace('</head>', `<style>${compiled.css}\n${fontCss}\nhtml{scrollbar-width:none}</style></head>`);
 await fs.writeFile(path.join(outputDir,'generated.html'), html);
 const ref = input.design.reference;
 const referenceHtml = ref ? `<html><body style="margin:0"><img src="data:image/png;base64,${ref.image}" style="display:block;width:${ref.width}px;height:${ref.height}px"></body></html>` : '';
