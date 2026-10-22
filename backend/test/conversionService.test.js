@@ -110,3 +110,22 @@ test('retains Figma child coordinates inside bordered cards and renders paragrap
   assert.match(body, /One/);
   assert.match(body, /Two/);
 });
+
+
+test('CTA sections and nested button wrappers retain layout containers instead of emitting nested buttons', async () => {
+  for (const name of ['CTA / 4 /', 'CTA', 'Button group']) {
+    const design = { format: 'figma-to-tailwind', version: 1, frame: { name: 'Home', type: 'FRAME', width: 1440, height: 6546, children: [
+      { name, type: 'FRAME', x: 0, y: 5600, width: 1440, height: 500, children: [
+        { name: 'Your space is waiting', type: 'TEXT', x: 60, y: 60, width: 400, height: 50, text: 'Your space is waiting' },
+        { name: 'Button', type: 'FRAME', x: 60, y: 180, width: 180, height: 40, children: [{ name: 'Button label', type: 'TEXT', width: 160, height: 24, text: 'Join now' }] },
+        { name: 'Photo frame', type: 'FRAME', x: 800, y: 60, width: 480, height: 300 }
+      ] }
+    ] } };
+    const output = await convertDesign({ kind: 'layers', design }, null, {});
+    assert.ok(output.html.includes(`<div data-layer="${name}"`), `${name} remains a container`);
+    assert.match(output.html, /<button type="button" data-layer="Button"/);
+    assert.equal((output.html.match(/<button\b/g) || []).length, 1);
+    assert.match(output.html, /data-layer="Photo frame"/);
+    assert.equal(design.frame.children[0].y, 5600);
+  }
+});

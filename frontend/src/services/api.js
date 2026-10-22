@@ -25,3 +25,32 @@ export async function fetchHistory() {
 }
 
 export const downloadUrl = (id) => `${BASE}/history/${id}/download`;
+
+export async function figmaRequest(action, data) {
+  const res = await fetch(`${BASE}/figma/${action}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+  });
+  if (!res.ok) throw await toError(res);
+  return res.json();
+}
+
+export async function pasteFigmaClipboard(input) {
+  const res = await fetch(`${BASE}/clipboard`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(typeof input === 'string' ? { html: input } : input),
+  });
+  if (!res.ok) throw await toError(res);
+  return res.json();
+}
+
+
+export async function previewLayerFile(file) {
+  if (file.size > 48 * 1024 * 1024) throw new Error('Choose a layer JSON file smaller than 48 MB, or export this frame in sections.');
+  const layers = await file.text();
+  let design;
+  try { design = JSON.parse(layers); }
+  catch { throw new Error('This JSON file is incomplete or invalid. Export it again from the Figma plugin.'); }
+  if (!['figma-to-tailwind', 'figma-to-tailwind-packed'].includes(design?.format) || design.version !== 1 || !design.frame) {
+    throw new Error('Upload the complete layer JSON from the Frame to Code plugin. A paste troubleshooting sample or Figma API JSON is a different format.');
+  }
+  return pasteFigmaClipboard({ layers });
+}

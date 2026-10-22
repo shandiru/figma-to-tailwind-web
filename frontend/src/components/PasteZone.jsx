@@ -40,7 +40,7 @@ export default function PasteZone({ title, file, onChange, disabled }) {
         <h3 className="font-semibold text-slate-700">{title}</h3>
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${file ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>{file ? 'Connected' : 'Optional'}</span>
       </div>
-      <div ref={zone} tabIndex={disabled ? -1 : 0} role="button" aria-disabled={disabled} aria-label={`Paste or upload ${title} layers`}
+      <div ref={zone} data-paste-zone tabIndex={disabled ? -1 : 0} role="button" aria-disabled={disabled} aria-label={`Paste or upload ${title} layers`}
         onClick={() => !disabled && input.current.click()}
         onKeyDown={e => { if (['Enter', ' '].includes(e.key)) { e.preventDefault(); if (!disabled) input.current.click(); } }}
         onDragOver={e => { e.preventDefault(); if (!disabled) setDragging(true); }} onDragLeave={() => setDragging(false)}
@@ -51,8 +51,8 @@ export default function PasteZone({ title, file, onChange, disabled }) {
             {file ? <path d="m5 12 4 4L19 6" /> : <><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8m-4-4h8"/></>}
           </svg>
         </div>
-        <p className="max-w-full truncate text-sm font-semibold text-slate-800">{summary?.name || 'Paste your Figma layers'}</p>
-        <p className="mt-2 text-center text-xs leading-6 text-slate-400">{summary ? `${summary.width} × ${summary.height} · ${summary.count} editable layers` : <>Copy with the plugin, then <kbd>Ctrl / Cmd + V</kbd><br/>or click to upload a layer JSON file</>}</p>
+        <p className="max-w-full truncate text-sm font-semibold text-slate-800">{summary?.name || 'Upload Figma design JSON'}</p>
+        <p className="mt-2 text-center text-xs leading-6 text-slate-400">{summary ? `${summary.width} × ${summary.height} · ${summary.count} editable layers` : <>Export the frame with artwork from the plugin.<br/>Click or drop its JSON file here.</>}</p>
         <span className="mt-5 text-[11px] font-medium text-violet-500">{file ? 'Click to replace frame' : 'Text, styles & geometry included'}</span>
       </div>
       {file && <button type="button" disabled={disabled} onClick={() => { setError(''); onChange(null); }} className="mt-2 text-xs text-slate-400 hover:text-red-500">Remove frame</button>}

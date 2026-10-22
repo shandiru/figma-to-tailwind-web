@@ -19,6 +19,14 @@ export async function prepareInput(file, label) {
         design = JSON.parse(unpacked.toString('utf8'));
       }
       if (design?.format !== 'figma-to-tailwind' || design.version !== 1 || !design.frame) throw new Error('Invalid format');
+      if (design.reference) {
+        const reference = design.reference;
+        // A reference is optional comparison media, never a replacement for layers.
+        if (reference.format !== 'png' || typeof reference.image !== 'string' ||
+          reference.image.length > 24 * 1024 * 1024 || !/^[A-Za-z0-9+/=]+$/.test(reference.image) ||
+          !Buffer.from(reference.image.slice(0, 12), 'base64').subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ||
+          reference.width !== design.frame.width || reference.height !== design.frame.height) delete design.reference;
+      }
       const pending = [{ node: design.frame, depth: 0 }];
       let count = 0;
       while (pending.length) {

@@ -9,8 +9,11 @@ export default function HistoryPane({ refreshKey }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let current = true;
     setItems(null);
-    fetchHistory().then(setItems).catch((e) => setError(e.message));
+    setError('');
+    fetchHistory().then(value => { if (current) setItems(value); }).catch(e => { if (current) setError(e.message); });
+    return () => { current = false; };
   }, [refreshKey]);
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;

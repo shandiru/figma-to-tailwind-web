@@ -26,7 +26,7 @@ test('accepts compressed layer exports without discarding their packed data', as
 
 test('rejects native Figma metadata and screenshots with editable layer instructions', () => {
   assert.throws(() => fileFromTransfer(transfer('', [], '<span data-figma="binary">Frame</span>')), /Copy layers/);
-  assert.throws(() => fileFromTransfer(transfer('', [new File(['png'], 'frame.png', { type: 'image/png' })])), /screenshots/);
+  assert.throws(() => fileFromTransfer(transfer('', [new File(['png'], 'frame.png', { type: 'image/png' })])), /screenshots/i);
   assert.throws(() => fileFromTransfer(transfer('{broken')), /incomplete/);
   assert.equal(fileFromTransfer(transfer()), null);
 });

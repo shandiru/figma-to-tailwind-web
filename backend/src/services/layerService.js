@@ -69,6 +69,9 @@ function visualClasses(css, frameWidth) {
 
 const lengthClass = (utility, pixels, frameWidth) => `${utility}-[${Number((pixels / frameWidth * 100).toFixed(8))}cqw]`;
 
+const buttonCandidate = node => node && node.type !== 'TEXT' && !node.asset &&
+  (/(^|\b)button(\b|$)/i.test(node.name || '') || /^\s*cta\s*$/i.test(node.name || ''));
+
 function borderOffsets(css) {
   const pixels = value => typeof value === 'string' ? Number(cssFallbacks(value).match(/^\s*(-?(?:\d*\.)?\d+)px\b/)?.[1]) || 0 : 0;
   const widths = typeof css['border-width'] === 'string' ? css['border-width'].trim().split(/\s+/) : [];
@@ -85,6 +88,14 @@ function borderOffsets(css) {
 /** Render structured Figma layers as editable elements, never a screenshot of the frame. */
 export async function convertLayers(desktop, mobile, opts) {
   const files = [];
+  const buttonDescendants = new WeakMap();
+  function containsButton(node, depth = 0) {
+    if (!node || typeof node !== 'object' || Array.isArray(node)) return false;
+    if (depth > 50) throw new ApiError(400, 'Invalid or overly complex layer data. Export a smaller frame.');
+    if (!buttonDescendants.has(node)) buttonDescendants.set(node,
+      Boolean(buttonCandidate(node)) || (Array.isArray(node.children) && node.children.some(child => containsButton(child, depth + 1))));
+    return buttonDescendants.get(node);
+  }
   const fonts = new Set();
   const fontStyles = new Map();
   function registerFont(css, inherited = {}) {
@@ -104,14 +115,19 @@ export async function convertLayers(desktop, mobile, opts) {
   let textCount = 0;
   const assetCache = new Map();
   const frames = {};
-  const imageAsset = async (encoded, prefix, layerPath) => {
-    if (assetCache.has(encoded)) return assetCache.get(encoded);
+  const imageAsset = async (encoded, prefix, layerPath, geometry) => {
+    const geometryKey = `${geometry.width}:${geometry.height}`;
+    const cached = assetCache.get(encoded);
+    if (cached?.has('*')) return cached.get('*');
+    if (cached?.has(geometryKey)) return cached.get(geometryKey);
     const file = `${prefix}-${++assets}.webp`;
-    const { buffer, reduced } = await encodeArtwork(encoded, layerPath);
+    const { buffer, reduced, viewportRepaired, usedGeometry } = await encodeArtwork(encoded, layerPath, geometry);
     files.push({ file, buffer });
     if (reduced) warnings.add(`Artwork "${String(layerPath).slice(-200)}" was rasterised at a reduced resolution to fit image format limits. Its layout dimensions are unchanged.`);
+    if (viewportRepaired) warnings.add(`SVG raster dimensions were repaired for "${String(layerPath).slice(-200)}". Its measured layer size and position are unchanged.`);
     const src = `assets/images/${file}`;
-    assetCache.set(encoded, src);
+    if (!cached) assetCache.set(encoded, new Map());
+    assetCache.get(encoded).set(usedGeometry ? geometryKey : '*', src);
     return src;
   };
 
@@ -121,7 +137,9 @@ export async function convertLayers(desktop, mobile, opts) {
     }
     const width = number(node.width);
     const height = number(node.height);
-    if (width <= 0 || height <= 0) return '';
+    // Unclipped Figma groups can have zero-sized bounds and visible children.
+    if (width < 0 || height < 0 || ((width === 0 || height === 0) &&
+      (node.clipsContent || node.asset || !Array.isArray(node.children) || !node.children.length))) return '';
     const layerPath = `${parentPath}${parentPath ? ' / ' : ''}${node.name || node.type || 'Unnamed layer'}`;
     const m = node.transform;
     const matrix = Array.isArray(m) && m.length === 2 && m.every(row => Array.isArray(row) && row.length === 3)
@@ -142,7 +160,7 @@ export async function convertLayers(desktop, mobile, opts) {
     if (node.clipsContent) classes.push('overflow-hidden');
     let background = '';
     if (node.backgroundImage) {
-      const src = await imageAsset(node.backgroundImage, 'background', layerPath);
+      const src = await imageAsset(node.backgroundImage, 'background', layerPath, { width, height });
       const fit = node.backgroundMode === 'EXACT' ? 'object-fill' : node.backgroundMode === 'FIT' ? 'object-contain' : 'object-cover';
       background = `<img src="${src}" alt="" aria-hidden="true" class="pointer-events-none absolute inset-0 h-full w-full rounded-[inherit] ${fit}">`;
       if (node.backgroundMode && !['FIT', 'FILL', 'EXACT'].includes(node.backgroundMode)) warnings.add('Some image crops use a centered cover approximation. Re-export with plugin v1.5 or later to retain their Figma crop.');
@@ -152,7 +170,7 @@ export async function convertLayers(desktop, mobile, opts) {
       textCount++;
       registerFont(css);
       let text = escape(node.text);
-      if (Array.isArray(node.segments)) {
+      if (Array.isArray(node.segments) && node.segments.length) {
         if (node.segments.length > 10000) throw new ApiError(400, 'Too many text segments in a layer.');
         text = node.segments.map(segment => {
           registerFont(segment?.css, css);
@@ -167,7 +185,7 @@ export async function convertLayers(desktop, mobile, opts) {
         // Split styled text runs at paragraph boundaries, retaining each run's
         // classes rather than turning paragraph spacing into extra blank lines.
         const lines = [''];
-        const runs = Array.isArray(node.segments) ? node.segments : [{ text: node.text }];
+        const runs = Array.isArray(node.segments) && node.segments.length ? node.segments : [{ text: node.text }];
         for (const run of runs) {
           const values = String(run.text || '').split('\n');
           values.forEach((value, index) => {
@@ -180,14 +198,16 @@ export async function convertLayers(desktop, mobile, opts) {
       return `<div data-layer="${name}" class="${escape(classes.join(' '))} flex min-h-0 flex-col ${alignment}">${background}${paragraphs}</div>`;
     }
     if (node.asset) {
-      const src = await imageAsset(node.asset, 'artwork', layerPath);
-      return `<img data-layer="${name}" alt="${name}" src="${src}" class="${escape(classes.join(' '))} object-fill">`;
+      const src = await imageAsset(node.asset, 'artwork', layerPath, { width, height });
+      return `<img data-layer="${name}" alt="${name}" src="${src}" class="${escape(classes.join(' '))} max-w-none object-fill">`;
     }
     if (node.children !== undefined && !Array.isArray(node.children)) throw new ApiError(400, 'Invalid layer children.');
     const children = [];
     const ownBorder = borderOffsets(css);
     for (const child of node.children || []) children.push(await render(child, frameWidth, false, depth + 1, layerPath, ownBorder));
-    const isButton = !root && /(^|\b)(button|cta)(\b|$)/i.test(node.name || '');
+    // A CTA section is a layout container. Nested buttons cause HTML parsers
+    // to close ancestors early and reparent later artwork outside the section.
+    const isButton = !root && buttonCandidate(node) && !(node.children || []).some(child => containsButton(child));
     const tag = isButton ? 'button' : 'div';
     return `<${tag}${isButton ? ' type="button"' : ''} data-layer="${name}" class="${escape(classes.join(' '))}${isButton ? ' cursor-pointer' : ''}">\n${background}${children.join('\n')}\n</${tag}>`;
   }

@@ -3,6 +3,52 @@ import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
+test('thin SVG artwork uses PNG when possible and retains a repairable SVG if PNG export fails', async () => {
+  const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
+  for (const pngAvailable of [true, false]) {
+    const messages = [];
+    const formats = [];
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="0.01" height="20" viewBox="0 0 0.01 20"><path d="M0 0H0.01V20H0Z"/></svg>');
+    const vector = { name: 'Thin stripe', type: 'VECTOR', width: 0.01, height: 20, relativeTransform: [[1, 0, 3], [0, 1, 4]], exportAsync: async options => {
+      formats.push(options.format);
+      if (options.format === 'SVG') return svg;
+      if (!pngAvailable) throw new Error('PNG dimensions too small');
+      return new Uint8Array([137, 80, 78, 71]);
+    } };
+    const frame = { name: 'Impact figures', type: 'FRAME', width: 200, height: 100, children: [vector] };
+    const figma = { currentPage: { selection: [frame] }, showUI: () => {}, base64Encode: bytes => Buffer.from(bytes).toString('base64'), ui: { postMessage: message => messages.push(message) } };
+    vm.runInNewContext(code, { figma, __html__: '' });
+    await figma.ui.onmessage({ type: 'export' });
+    const result = messages.find(message => message.type === 'result');
+    assert.ok(result, JSON.stringify(messages));
+    assert.deepEqual(formats, ['SVG', 'PNG']);
+    const design = JSON.parse(result.json);
+    const layer = design.frame.children[0];
+    assert.equal(layer.width, 0.01);
+    const data = design.assets[layer.asset.assetId];
+    assert.equal(data, pngAvailable ? 'iVBORw==' : svg.toString('base64'));
+  }
+});
+
+test('Copy complete design exports original layer data and copies it without a JSON download', async () => {
+  const html = await readFile(new URL('../../figma-plugin/ui.html', import.meta.url), 'utf8');
+  const elements = Object.fromEntries(['status', 'data', 'export', 'copy', 'download', 'complete'].map(id => [id, { disabled: false, value: '', className: '' }]));
+  const copied = [];
+  const posted = [];
+  const context = vm.createContext({ Blob, navigator: { clipboard: { writeText: async value => copied.push(value) } }, document: { getElementById: id => elements[id] }, parent: { postMessage: message => posted.push(message) } });
+  vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
+  elements.complete.onclick();
+  assert.equal(posted.at(-1).pluginMessage.type, 'export');
+  assert.equal(posted.at(-1).pluginMessage.rasterArtwork, true);
+  assert.equal(posted.at(-1).pluginMessage.includeReference, true);
+  assert.equal(elements.complete.disabled, true);
+  const json = JSON.stringify({ format: 'figma-to-tailwind', version: 1, frame: { name: 'Complete frame', width: 1200, height: 800 }, assets: { photo: 'aW1hZ2U=' } });
+  await context.onmessage({ data: { pluginMessage: { type: 'result', json, name: 'Complete frame', width: 1200, height: 800, count: 10 } } });
+  assert.equal(copied[0], json);
+  assert.match(elements.status.textContent, /Copied with artwork/);
+  assert.equal(elements.complete.disabled, false);
+});
+
 test('plugin exports live text and containers while limiting artwork exports to leaves', async () => {
   const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
   const messages = [];
@@ -57,13 +103,13 @@ test('export failures identify the layer and notify outside the plugin panel', a
   const notifications = [];
   const frame = {
     name: 'Main frame', type: 'FRAME', width: 300, height: 200, visible: true,
-    children: [{ name: 'Broken text', type: 'TEXT', width: 100, height: 20, characters: 'Example', getStyledTextSegments: () => { throw new Error('Text unavailable'); } }],
+    children: [{ name: 'Broken artwork', type: 'VECTOR', width: 100, height: 20, exportAsync: () => { throw new Error('Artwork unavailable'); } }],
   };
   const figma = { currentPage: { selection: [frame] }, showUI: () => {}, notify: message => notifications.push(message), ui: { postMessage: message => messages.push(message) } };
   vm.runInNewContext(code, { figma, __html__: '' });
   await figma.ui.onmessage({ type: 'export' });
-  assert.match(messages.at(-1).message, /Broken text.*Text unavailable/);
-  assert.match(notifications[0], /Broken text/);
+  assert.match(messages.at(-1).message, /Broken artwork.*Artwork unavailable/);
+  assert.match(notifications[0], /Broken artwork/);
 });
 
 test('plugin UI keeps status above controls and progress does not re-enable copy', async () => {
@@ -76,6 +122,8 @@ test('plugin UI keeps status above controls and progress does not re-enable copy
   elements.export.onclick();
   assert.equal(posted[0].pluginMessage.type, 'ready');
   assert.equal(posted.at(-1).pluginMessage.type, 'export');
+  assert.equal(posted.at(-1).pluginMessage.rasterArtwork, true);
+  assert.equal(posted.at(-1).pluginMessage.includeReference, true);
   context.onmessage({ data: { pluginMessage: { type: 'progress', count: 15, name: 'Artwork' } } });
   assert.equal(elements.export.disabled, true);
   assert.equal(elements.copy.disabled, true);
@@ -136,11 +184,11 @@ test('handles Figma string rejections and attempts export before discarding null
   };
   vm.runInNewContext(code, { figma, __html__: '' });
   await figma.ui.onmessage({ type: 'ready' });
-  assert.equal(messages[0].version, '1.5');
+  assert.equal(messages[0].version, '1.12');
   await figma.ui.onmessage({ type: 'export' });
   const result = messages.find(message => message.type === 'result');
   assert.ok(result, JSON.stringify(messages));
-  assert.equal(result.exporterVersion, '1.5');
+  assert.equal(result.exporterVersion, '1.12');
   const design = JSON.parse(result.json);
   assert.equal(design.frame.children.length, 2);
   assert.equal(design.frame.children[0].name, 'Null bounds');
@@ -284,4 +332,172 @@ test('bound section colors and button borders survive computed CSS variables wit
   assert.match(output.html, /background:rgba\(255,230,191,1\)/);
   assert.match(output.html, /background:rgba\(128,191,51,1\)/);
   assert.match(output.html, /border-color:rgba\(128,191,51,1\)/);
+});
+
+
+test('complete mode composites nested artwork, preserves incomplete text runs and includes comparison only', async () => {
+  const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
+  const messages = [], exports = [];
+  const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const artwork = { name: 'Illustration', type: 'GROUP', width: 200, height: 150, children: [{ name: 'Nested mask', type: 'VECTOR' }], exportAsync: async options => { exports.push(options); return png; } };
+  const text = { name: 'All content', type: 'TEXT', width: 300, height: 40, characters: 'Complete editable heading', fontSize: 22, fontName: { family: 'Inter', style: 'Regular' }, getStyledTextSegments: () => [] };
+  const frame = { name: 'Frame', type: 'FRAME', width: 1200, height: 900, children: [artwork, text], exportAsync: async options => { exports.push(options); return png; } };
+  const figma = { currentPage: { selection: [frame] }, showUI() {}, base64Encode: bytes => Buffer.from(bytes).toString('base64'), ui: { postMessage: message => messages.push(message) } };
+  vm.runInNewContext(code, { figma, __html__: '' });
+  await figma.ui.onmessage({ type: 'export', rasterArtwork: true, includeReference: true });
+  const result = messages.find(message => message.type === 'result');
+  assert.ok(result, JSON.stringify(messages));
+  const design = JSON.parse(result.json);
+  assert.equal(exports.length, 2);
+  assert.equal(exports[1].useAbsoluteBounds, true, 'comparison retains the whole frame including empty margins');
+  assert.ok(exports.every(settings => settings.format === 'PNG'));
+  assert.ok(design.frame.children[0].asset);
+  assert.equal(design.frame.children[0].children, undefined);
+  assert.equal(design.frame.children[1].segments[0].text, text.characters);
+  assert.equal(design.frame.children[1].asset, undefined);
+  assert.equal(design.frame.asset, undefined);
+  assert.equal(design.reference.width, 1200);
+  assert.equal(design.reference.image, png.toString('base64'));
+});
+
+test('image fill stacks retain overlays in their original order and clean up temporary nodes', async () => {
+  const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
+  const paints = [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 }, opacity: 0.4 }, { type: 'IMAGE', imageHash: 'photo', scaleMode: 'FILL' }];
+  const messages = []; let rendered, removed = false;
+  const frame = { name: 'Overlay photo', type: 'FRAME', width: 600, height: 400, fills: paints, children: [] };
+  const figma = { currentPage: { selection: [frame] }, showUI() {}, base64Encode: bytes => Buffer.from(bytes).toString('base64'), createRectangle: () => ({ resize() {}, set fills(value) { rendered = value; }, exportAsync: async () => Buffer.from('photo'), remove() { removed = true; } }), ui: { postMessage: message => messages.push(message) } };
+  vm.runInNewContext(code, { figma, __html__: '' });
+  await figma.ui.onmessage({ type: 'export' });
+  assert.equal(removed, true);
+  assert.deepEqual(Array.from(rendered), paints);
+  const result = messages.find(message => message.type === 'result');
+  assert.ok(result, JSON.stringify(messages));
+  assert.equal(JSON.parse(result.json).frame.backgroundMode, 'EXACT');
+});
+
+
+test('complete artwork uses local render bounds and applies rotation only once, cleaning clones on success or failure', async () => {
+  const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
+  for (const fail of [false, true]) {
+    const messages = []; let stage, clone;
+    const originalTransform = [[0, -1, 200], [1, 0, 100]];
+    const art = { name: 'Rotated caravan', type: 'RECTANGLE', width: 100, height: 60, relativeTransform: originalTransform, absoluteRenderBounds: { x: 900, y: 500, width: 70, height: 110 },
+      exportAsync: () => assert.fail('The rotated source must not be exported directly'),
+      clone() { clone = { removed: false, constraints: { horizontal: 'SCALE', vertical: 'SCALE' }, relativeTransform: null,
+        get absoluteRenderBounds() { return { x: stage.x - 4, y: stage.y - 6, width: 108, height: 72 }; },
+        remove() { this.removed = true; }
+      }; return clone; }
+    };
+    const frame = { name: 'Page', type: 'FRAME', width: 1200, height: 900, children: [art] };
+    const figma = { currentPage: { selection: [frame] }, showUI() {}, base64Encode: bytes => Buffer.from(bytes).toString('base64'), ui: { postMessage: message => messages.push(message) },
+      createFrame() { stage = { removed: false, x: 0, y: 0, get absoluteTransform() { return [[1, 0, this.x], [0, 1, this.y]]; }, resize(width, height) { this.width = width; this.height = height; }, appendChild() {},
+        exportAsync: async settings => {
+          assert.equal(settings.useAbsoluteBounds, true);
+          assert.equal(stage.width, 108); assert.equal(stage.height, 72);
+          assert.deepEqual(JSON.parse(JSON.stringify(clone.relativeTransform)), [[1, 0, 4], [0, 1, 6]]);
+          assert.equal(clone.constraints.horizontal, 'MIN');
+          if (fail) throw new Error('Raster export failed');
+          return Buffer.from('local raster');
+        }, remove() { this.removed = true; }
+      }; return stage; }
+    };
+    vm.runInNewContext(code, { figma, __html__: '' });
+    await figma.ui.onmessage({ type: 'export', rasterArtwork: true });
+    assert.equal(stage.removed, true); assert.equal(clone.removed, true);
+    assert.deepEqual(art.relativeTransform, originalTransform, 'source transform is unchanged');
+    if (fail) { assert.match(messages.at(-1).message, /Raster export failed/); continue; }
+    const design = JSON.parse(messages.find(message => message.type === 'result').json);
+    const layer = design.frame.children[0];
+    assert.equal(layer.width, 108); assert.equal(layer.height, 72);
+    assert.deepEqual(layer.transform, [[0, -1, 206], [1, 0, 96]]);
+    assert.equal(design.exporterVersion, '1.12');
+  }
+});
+
+test('complete export retains structural photo frames and renders FILL transforms in a fixed paint viewport', async () => {
+  const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
+  const messages = []; let settings, removed = false;
+  const paint = { type: 'IMAGE', imageHash: 'photo', scaleMode: 'FILL', imageTransform: [[0.6, 0, 0.2], [0, 0.6, 0.1]] };
+  const photo = { name: 'Photo frame', type: 'FRAME', width: 400, height: 300, fills: [paint], children: [], getCSSAsync: async () => ({ background: 'rgba(0,0,0,0.4)', 'border-radius': '16px' }), exportAsync: () => assert.fail('Structural frame should stay selectable') };
+  const section = { name: 'Hero section', type: 'FRAME', width: 1200, height: 600, children: [photo], exportAsync: () => assert.fail('Section should remain a container') };
+  const frame = { name: 'Page', type: 'FRAME', width: 1200, height: 900, children: [section] };
+  const figma = { currentPage: { selection: [frame] }, showUI() {}, base64Encode: bytes => Buffer.from(bytes).toString('base64'), ui: { postMessage: message => messages.push(message) },
+    getImageByHash: () => assert.fail('FILL must retain its Figma transform, never a raw image + object-cover'),
+    createRectangle: () => ({ resize() {}, exportAsync: async options => { settings = options; return Buffer.from('exact crop'); }, remove() { removed = true; } })
+  };
+  vm.runInNewContext(code, { figma, __html__: '' });
+  await figma.ui.onmessage({ type: 'export', rasterArtwork: true });
+  assert.equal(removed, true); assert.equal(settings.useAbsoluteBounds, true);
+  const design = JSON.parse(messages.find(message => message.type === 'result').json);
+  const child = design.frame.children[0].children[0];
+  assert.equal(child.backgroundMode, 'EXACT');
+  assert.ok(child.backgroundImage);
+  assert.equal(child.css.background, undefined, 'paint stack is not blended a second time behind the raster');
+  assert.equal(child.css['border-radius'], '16px');
+  assert.equal(design.frame.children[0].name, 'Hero section');
+});
+
+
+test('incremental mode resolves collection objects asynchronously for image paint, artwork stage and clone', async () => {
+  const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
+  const messages = [], applications = [];
+  const collection = { id: 'VariableCollectionId:7:9', name: 'Theme' };
+  const modes = { [collection.id]: '7:10' };
+  let lookups = 0, removed = 0, stage;
+  const apply = (received, mode) => {
+    assert.equal(typeof received, 'object', 'ID strings are rejected by dynamic-page mode');
+    assert.equal(received, collection); assert.equal(mode, '7:10'); applications.push(received);
+  };
+  const artwork = { name: 'Icon', type: 'VECTOR', width: 100, height: 30, resolvedVariableModes: modes,
+    clone: () => ({ width: 100, height: 30, setExplicitVariableModeForCollection: apply,
+      get absoluteRenderBounds() { return { x: stage.x, y: stage.y, width: 100, height: 30 }; }, remove() { removed++; }
+    })
+  };
+  const frame = { name: 'Header / 7 /', type: 'FRAME', width: 400, height: 200, resolvedVariableModes: modes, fills: [{ type: 'IMAGE', imageHash: 'photo', scaleMode: 'FILL' }], children: [artwork] };
+  const figma = { currentPage: { selection: [frame] }, showUI() {}, base64Encode: bytes => Buffer.from(bytes).toString('base64'), ui: { postMessage: message => messages.push(message) },
+    variables: { getVariableCollectionByIdAsync: async id => { lookups++; assert.equal(id, collection.id); await Promise.resolve(); return collection; } },
+    createRectangle: () => ({ resize() {}, setExplicitVariableModeForCollection: apply, exportAsync: async () => Buffer.from('paint'), remove() { removed++; } }),
+    createFrame: () => (stage = { x: 0, y: 0, resize() {}, appendChild() {}, setExplicitVariableModeForCollection: apply,
+      get absoluteTransform() { return [[1, 0, this.x], [0, 1, this.y]]; }, exportAsync: async () => Buffer.from('art'), remove() { removed++; }
+    })
+  };
+  vm.runInNewContext(code, { figma, __html__: '' });
+  await figma.ui.onmessage({ type: 'export', rasterArtwork: true });
+  assert.ok(messages.find(message => message.type === 'result'), JSON.stringify(messages));
+  assert.equal(lookups, 1, 'collection lookup is cached only for this export');
+  assert.equal(applications.length, 3, 'all temporary render targets receive the actual collection');
+  assert.equal(removed, 3, 'temporary nodes are removed');
+});
+
+test('missing variable collections report a useful layer error and remove temporary paint nodes', async () => {
+  const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
+  const messages = []; let removed = false;
+  const frame = { name: 'Header / 7 /', type: 'FRAME', width: 400, height: 200, resolvedVariableModes: { missing: 'mode' }, fills: [{ type: 'IMAGE', imageHash: 'photo', scaleMode: 'FILL' }], children: [] };
+  const figma = { currentPage: { selection: [frame] }, showUI() {}, ui: { postMessage: message => messages.push(message) }, variables: { getVariableCollectionByIdAsync: async () => null },
+    createRectangle: () => ({ resize() {}, setExplicitVariableModeForCollection: () => assert.fail('Unavailable collections must not be applied'), exportAsync: () => assert.fail('Must not export incorrect colors'), remove() { removed = true; } })
+  };
+  vm.runInNewContext(code, { figma, __html__: '' });
+  await figma.ui.onmessage({ type: 'export' });
+  assert.equal(removed, true);
+  assert.match(messages.at(-1).message, /Header \/ 7 \/.*Variable collection.*unavailable/);
+});
+
+
+test('bound color alpha is applied once for fills, strokes and styled text', async () => {
+  const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
+  const messages = [];
+  const paint = { type: 'SOLID', color: { r: 0.01, g: 0.01, b: 0.01 }, opacity: 0.05, boundVariables: { color: { id: 'transparent-color' } } };
+  const text = { name: 'Label', type: 'TEXT', width: 100, height: 24, characters: 'Readable', fills: [paint], getStyledTextSegments: () => [{ characters: 'Readable', fills: [paint] }] };
+  const frame = { name: 'Controls', type: 'FRAME', width: 300, height: 100, fills: [paint], strokes: [paint], strokeWeight: 1, children: [text] };
+  const figma = { currentPage: { selection: [frame] }, showUI() {}, ui: { postMessage: message => messages.push(message) }, variables: { getVariableByIdAsync: async () => ({ resolveForConsumer: () => ({ resolvedType: 'COLOR', value: { r: 0.01, g: 0.01, b: 0.01, a: 0.05 } }) }) } };
+  vm.runInNewContext(code, { figma, __html__: '' });
+  await figma.ui.onmessage({ type: 'export' });
+  let design = JSON.parse(messages.find(message => message.type === 'result').json);
+  assert.equal(design.frame.css.background, 'rgba(3,3,3,0.05)');
+  assert.equal(design.frame.css['border-color'], 'rgba(3,3,3,0.05)');
+  assert.equal(design.frame.children[0].segments[0].css.color, 'rgba(3,3,3,0.05)');
+  delete paint.opacity; messages.length = 0;
+  await figma.ui.onmessage({ type: 'export' });
+  design = JSON.parse(messages.find(message => message.type === 'result').json);
+  assert.equal(design.frame.css.background, 'rgba(3,3,3,0.05)', 'variable alpha is the fallback when paint opacity is absent');
 });

@@ -14,7 +14,7 @@ export function fileFromTransfer(dt) {
     }
   }
   if (text || dt.getData('text/html') || files.length || [...(dt.items || [])].some(item => item.kind === 'file')) {
-    throw new Error('Use the Frame to Code plugin > Export selected frame > Copy layers, then paste here. Normal Figma copy and screenshots do not contain the editable layer data this converter needs.');
+    throw new Error('For normal Figma copy, switch to Paste design. In this plugin zone, use Frame to Code > Export selected frame > Copy layers. Screenshots cannot provide editable layers.');
   }
   return null;
 }

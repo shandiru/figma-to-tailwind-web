@@ -1,0 +1,107 @@
+[
+  {
+    "path": "/Home • Desktop/Header / 9 //Content/Container/Component/Column/Actions/Button",
+    "before": 0.010000000298023226,
+    "after": 0.1,
+    "matchingReferenceSamples": 11,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Layout / 254 //Container/Actions/Button",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 12,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Contact / 6 //Container/Component/Form/Input/Select",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 12,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Contact / 6 //Container/Component/Form/Radios/Content/Row/Radio/Radio",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 12,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Contact / 6 //Container/Component/Form/Radios/Content/Row/Radio/Radio",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 12,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Contact / 6 //Container/Component/Form/Radios/Content/Row/Radio/Radio",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 12,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Contact / 6 //Container/Component/Form/Radios/Content/Row/Radio/Radio",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 12,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Contact / 6 //Container/Component/Form/Radios/Content/Row/Radio/Radio",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 12,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Contact / 6 //Container/Component/Form/Radios/Content/Row/Radio/Radio",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 12,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Contact / 6 //Container/Component/Form/Input/Text Area",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 12,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Contact / 6 //Container/Component/Form/Checkbox/Checkbox",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 12,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/FAQ / 9 //Container/Content/Actions/Button",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 11,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/CTA / 1 //Container/Component/Column/Actions/Button",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 11,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Footer / 16 //Container/Component/Content/Newsletter/Actions/Form/Text input",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 11,
+    "total": 12
+  },
+  {
+    "path": "/Home • Desktop/Footer / 16 //Container/Component/Content/Newsletter/Actions/Form/Button",
+    "before": 0.0025000000745058065,
+    "after": 0.05,
+    "matchingReferenceSamples": 11,
+    "total": 12
+  }
+]

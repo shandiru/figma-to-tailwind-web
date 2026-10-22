@@ -1,4 +1,4 @@
-const EXPORTER_VERSION = '1.5';
+const EXPORTER_VERSION = '1.12';
 figma.showUI(__html__, { width: 440, height: 560, title: `Frame to Code v${EXPORTER_VERSION}` });
 let exporting = false;
 
@@ -23,7 +23,9 @@ async function resolvedPaint(paint, node, state) {
       state.warnings.push(`Used the paint color for "${node.name}" because a bound color could not be resolved: ${errorMessage(error)}`);
     }
   }
-  return color ? rgba(color, paint.opacity) : null;
+  // SolidPaint already exposes its effective alpha as opacity. COLOR variable
+  // values also have an alpha channel; multiplying both squares transparency.
+  return color ? rgba({ r: color.r, g: color.g, b: color.b }, paint.opacity === undefined ? color.a : paint.opacity) : null;
 }
 
 async function resolvedStyles(node, state) {
@@ -99,13 +101,16 @@ function containsText(node) {
 function iconText(node) {
   if (node.type !== 'TEXT') return false;
   const font = node.fontName;
-  return font && typeof font === 'object' && /font awesome|material icons|material symbols|iconfont/i.test(font.family);
+  return font && typeof font === 'object' && (/font\s*awesome|material\s*(icons|symbols)|iconfont|icomoon|ionicons|glyphicons/i.test(font.family) || /[\uE000-\uF8FF]/.test(node.characters || ''));
 }
 
 async function exportImageFill(node, paint, state) {
-  const exact = ['CROP', 'TILE'].includes(paint.scaleMode) || paint.rotation || (paint.filters && Object.values(paint.filters).some(value => value !== 0));
+  const paints = node.fills.filter(fill => fill.visible !== false);
+  // FILL and FIT can also carry an off-centre image transform. Render every
+  // image paint through Figma instead of recreating its crop with object-cover.
+  const exact = true;
   if (exact && typeof figma.createRectangle === 'function') {
-    const key = JSON.stringify({ width: node.width, height: node.height, paint });
+    const key = JSON.stringify({ width: node.width, height: node.height, paints, modes: node.resolvedVariableModes });
     if (state.imageFills.has(key)) return state.imageFills.get(key);
     // Render only the paint, preserving Figma's crop/rotation/filters while the
     // original frame's text and children continue to become editable HTML.
@@ -114,9 +119,10 @@ async function exportImageFill(node, paint, state) {
       temporary.name = '__frame_to_code_temporary_paint__';
       temporary.resize(node.width, node.height);
       temporary.x = -100000; temporary.y = -100000;
-      temporary.fills = [paint];
+      await inheritVariableModes(node, temporary, state);
+      temporary.fills = paints;
       temporary.strokes = [];
-      const bytes = await temporary.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: Math.min(2, 8192 / Math.max(node.width, node.height)) } });
+      const bytes = await temporary.exportAsync({ format: 'PNG', contentsOnly: true, useAbsoluteBounds: true, constraint: { type: 'SCALE', value: artworkScale(node.width, node.height) } });
       const result = { data: figma.base64Encode(bytes), mode: 'EXACT' };
       state.imageFills.set(key, result);
       return result;
@@ -128,11 +134,75 @@ async function exportImageFill(node, paint, state) {
   return { data: figma.base64Encode(await image.getBytesAsync()), mode: paint.scaleMode };
 }
 
+function artworkScale(width, height) {
+  return Math.min(2, 8192 / Math.max(width, height, 1), Math.sqrt(16000000 / Math.max(1, width * height)));
+}
+
+async function inheritVariableModes(source, target, state) {
+  if (typeof target.setExplicitVariableModeForCollection !== 'function') return;
+  for (const [collectionId, mode] of Object.entries(source.resolvedVariableModes || {})) {
+    if (!state.collections.has(collectionId)) {
+      const collection = await figma.variables.getVariableCollectionByIdAsync(collectionId);
+      if (!collection) throw new Error(`Variable collection "${collectionId}" is unavailable. Restore access to its library and export again.`);
+      state.collections.set(collectionId, collection);
+    }
+    // dynamic-page/incremental mode requires the collection object, not its ID.
+    target.setExplicitVariableModeForCollection(state.collections.get(collectionId), mode);
+  }
+}
+
+async function isolatedArtwork(node, layer, state) {
+  if (typeof node.clone !== 'function' || typeof figma.createFrame !== 'function') return null;
+  const matrix = (layer.transform || [[1, 0, 0], [0, 1, 0]]).map(row => [...row]);
+  const width = node.width, height = node.height;
+  const stage = figma.createFrame();
+  let clone;
+  try {
+    stage.name = '__frame_to_code_artwork_viewport__';
+    stage.x = -100000; stage.y = -100000;
+    stage.fills = []; stage.strokes = []; stage.clipsContent = false;
+    stage.resize(Math.max(0.01, width), Math.max(0.01, height));
+    await inheritVariableModes(node, stage, state);
+    clone = node.clone();
+    stage.appendChild(clone);
+    await inheritVariableModes(node, clone, state);
+    if ('constraints' in clone) clone.constraints = { horizontal: 'MIN', vertical: 'MIN' };
+    if ((clone.width !== width || clone.height !== height) && typeof clone.resizeWithoutConstraints === 'function') clone.resizeWithoutConstraints(width, height);
+    clone.relativeTransform = [[1, 0, 0], [0, 1, 0]];
+    // Measure the neutral clone in local coordinates. Exported pixels contain
+    // nested effects, but the node's own rotation/skew is applied once in HTML.
+    const bounds = clone.absoluteRenderBounds;
+    const origin = stage.absoluteTransform;
+    if (!bounds || !origin || bounds.width <= 0 || bounds.height <= 0) throw new Error('Artwork has no visible layers after isolation.');
+    const x = bounds.x - origin[0][2], y = bounds.y - origin[1][2];
+    stage.resize(Math.max(0.01, bounds.width), Math.max(0.01, bounds.height));
+    clone.relativeTransform = [[1, 0, -x], [0, 1, -y]];
+    stage.clipsContent = true;
+    const bytes = await stage.exportAsync({ format: 'PNG', contentsOnly: true, useAbsoluteBounds: true, constraint: { type: 'SCALE', value: artworkScale(bounds.width, bounds.height) } });
+    layer.width = bounds.width; layer.height = bounds.height;
+    layer.transform = [
+      [matrix[0][0], matrix[0][1], matrix[0][2] + matrix[0][0] * x + matrix[0][1] * y],
+      [matrix[1][0], matrix[1][1], matrix[1][2] + matrix[1][0] * x + matrix[1][1] * y],
+    ];
+    return bytes;
+  } finally {
+    if (clone && !clone.removed) clone.remove();
+    stage.remove();
+  }
+}
+
 async function exportArtwork(node, layer, state, outlineText) {
   const bounds = node.absoluteRenderBounds;
   if (node.opacity === 0 || (bounds && (bounds.width <= 0 || bounds.height <= 0))) {
     state.warnings.push(`Empty artwork "${node.name}" was skipped because it has no visible render bounds.`);
     return null;
+  }
+  if (state.rasterArtwork) {
+    const bytes = await isolatedArtwork(node, layer, state);
+    if (bytes) {
+      layer.asset = figma.base64Encode(bytes); layer.css = {}; layer.resolvedCss = {};
+      return layer;
+    }
   }
   const origin = node.absoluteTransform || [[1, 0, 0], [0, 1, 0]];
   const relative = node.relativeTransform || [[1, 0, 0], [0, 1, 0]];
@@ -145,9 +215,11 @@ async function exportArtwork(node, layer, state, outlineText) {
     state.warnings.push(`Rotated artwork "${node.name}" may need position adjustment.`);
   }
   const hasPhoto = Array.isArray(node.fills) && node.fills.some(paint => paint.type === 'IMAGE' && paint.visible !== false);
+  const raster = hasPhoto || state.rasterArtwork;
+  const pngSettings = { format: 'PNG', constraint: { type: 'SCALE', value: Math.min(2, 8192 / Math.max(layer.width, layer.height, 1), Math.sqrt(16000000 / Math.max(1, layer.width * layer.height))) } };
   let artwork;
   try {
-    artwork = await node.exportAsync(hasPhoto ? { format: 'PNG', constraint: { type: 'SCALE', value: 2 } } : { format: 'SVG', svgOutlineText: Boolean(outlineText) });
+    artwork = await node.exportAsync(raster ? pngSettings : { format: 'SVG', svgOutlineText: Boolean(outlineText) });
   } catch (error) {
     if (!/not have any visible layers|no visible layers/i.test(errorMessage(error))) throw error;
     // Some imported logo/vector nodes have no render bounds and fail SVG export
@@ -160,6 +232,26 @@ async function exportArtwork(node, layer, state, outlineText) {
     }
   }
   if (!artwork || artwork.length === 0) { state.warnings.push(`Empty artwork "${node.name}" was skipped.`); return null; }
+  if (!raster) {
+    // Figma can export a visible thin stripe with an SVG viewport that rounds
+    // to zero pixels in image decoders. Prefer a native PNG when available.
+    let header = '';
+    for (let index = 0; index < Math.min(artwork.length, 8192); index++) header += String.fromCharCode(artwork[index]);
+    const svgRoot = header.match(/<svg\b[^>]*>/i)?.[0];
+    const dimensions = svgRoot ? [...svgRoot.matchAll(/\s(?:width|height)\s*=\s*["']\s*([+-]?(?:\d*\.)?\d+(?:e[+-]?\d+)?)\s*(?:px)?\s*["']/gi)].map(match => Number(match[1])) : [];
+    if (dimensions.some(value => !Number.isFinite(value) || value < 0.5)) {
+      try {
+        const png = await node.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 2 } });
+        if (png && png.length) {
+          artwork = png;
+          state.warnings.push(`Thin artwork "${node.name}" was exported as PNG to avoid a zero-sized SVG raster viewport. Layer geometry is unchanged.`);
+        }
+      } catch {
+        // Retain the SVG; the backend can repair its raster viewport using the
+        // original viewBox or measured layer size, including already-copied data.
+      }
+    }
+  }
   layer.asset = figma.base64Encode(artwork);
   layer.css = {};
   layer.resolvedCss = {};
@@ -192,7 +284,8 @@ async function exportLayer(node, root, state, depth) {
   // Keep masked vector illustrations intact, rather than exporting unrelated
   // mask pieces that can cover or erase the artwork in HTML.
   const maskedArtwork = !root && 'children' in node && node.children.some(child => child.visible !== false && child.isMask) && !containsText(node);
-  if (maskedArtwork || iconText(node)) return exportArtwork(node, layer, state, true);
+  const graphicGroup = state.rasterArtwork && !root && ['GROUP', 'BOOLEAN_OPERATION', 'INSTANCE', 'COMPONENT'].includes(node.type) && node.children?.length && !containsText(node);
+  if (maskedArtwork || graphicGroup || iconText(node)) return exportArtwork(node, layer, state, true);
   if (node.isMask) state.warnings.push(`Mask "${node.name}" contains editable text or crosses container boundaries and may need manual clipping adjustment.`);
   if (node.type === 'TEXT') {
     layer.text = node.characters;
@@ -203,7 +296,12 @@ async function exportLayer(node, root, state, depth) {
     try { segments = node.getStyledTextSegments(fields); }
     catch {
       // Older Figma runtimes may not expose fontWeight as a segment field.
-      segments = node.getStyledTextSegments(fields.filter(field => field !== 'fontWeight'));
+      try { segments = node.getStyledTextSegments(fields.filter(field => field !== 'fontWeight')); }
+      catch { segments = []; }
+    }
+    if (!Array.isArray(segments) || segments.map(segment => segment.characters || '').join('') !== node.characters) {
+      state.warnings.push(`Text styles on "${node.name}" were unavailable; its complete text was retained with layer styles.`);
+      segments = [{ ...node, characters: node.characters, fontName: node.fontName, fontSize: node.fontSize, fills: node.fills, lineHeight: node.lineHeight, letterSpacing: node.letterSpacing }];
     }
     layer.segments = [];
     for (const segment of segments) {
@@ -222,9 +320,12 @@ async function exportLayer(node, root, state, depth) {
       const image = await exportImageFill(node, imageFill, state);
       layer.backgroundImage = image.data;
       layer.backgroundMode = image.mode;
+      if (image.mode === 'EXACT') for (const key of ['background', 'background-color', 'background-image']) {
+        delete layer.css[key]; delete layer.resolvedCss[key];
+      }
     }
     layer.children = [];
-    for (const child of node.children) {
+    for (const child of [...node.children]) {
       const exported = await exportLayer(child, false, state, depth + 1);
       if (exported) layer.children.push(exported);
     }
@@ -239,7 +340,7 @@ figma.ui.onmessage = async message => {
   }
   if (message.type !== 'export' || exporting) return;
   exporting = true;
-  const state = { count: 0, fonts: [], warnings: [], currentLayer: '', variables: new Map(), imageFills: new Map() };
+  const state = { count: 0, fonts: [], warnings: [], currentLayer: '', variables: new Map(), collections: new Map(), imageFills: new Map(), rasterArtwork: Boolean(message.rasterArtwork) };
   try {
     const selection = figma.currentPage.selection;
     if (selection.length !== 1 || !('children' in selection[0])) throw new Error('Select one frame, component, or group in Figma first.');
@@ -248,7 +349,14 @@ figma.ui.onmessage = async message => {
     state.currentLayer = ''; // Packaging errors apply to the frame, not the last visited layer.
     const assets = {};
     const assetIds = new Map();
-    const data = { format: 'figma-to-tailwind', version: 1, frame, fonts: [...new Set(state.fonts)], warnings: state.warnings, assets };
+    const data = { format: 'figma-to-tailwind', version: 1, exporterVersion: EXPORTER_VERSION, frame, fonts: [...new Set(state.fonts)], warnings: state.warnings, assets };
+    if (message.includeReference) {
+      try {
+        const scale = Math.min(1, 8192 / Math.max(frame.width, frame.height), Math.sqrt(16000000 / (frame.width * frame.height)));
+        const bytes = await selection[0].exportAsync({ format: 'PNG', contentsOnly: true, useAbsoluteBounds: true, constraint: { type: 'SCALE', value: scale } });
+        data.reference = { format: 'png', image: figma.base64Encode(bytes), width: frame.width, height: frame.height };
+      } catch (error) { state.warnings.push(`Figma comparison image unavailable: ${errorMessage(error)}`); }
+    }
     const json = JSON.stringify(data, (key, value) => {
       if ((key === 'asset' || key === 'backgroundImage') && typeof value === 'string') {
         let id = assetIds.get(value);

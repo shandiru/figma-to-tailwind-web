@@ -8,6 +8,7 @@ import { notFound, errorHandler } from './middleware/errorHandler.js';
 const app = express();
 app.use(helmet());
 app.use(cors({ origin: env.clientUrl, exposedHeaders: ['X-Conversion-Id', 'Content-Disposition'] }));
+app.use('/api/clipboard', express.json({ limit: '50mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api', routes);
