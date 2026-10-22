@@ -184,11 +184,11 @@ test('handles Figma string rejections and attempts export before discarding null
   };
   vm.runInNewContext(code, { figma, __html__: '' });
   await figma.ui.onmessage({ type: 'ready' });
-  assert.equal(messages[0].version, '1.12');
+  assert.equal(messages[0].version, '1.13');
   await figma.ui.onmessage({ type: 'export' });
   const result = messages.find(message => message.type === 'result');
   assert.ok(result, JSON.stringify(messages));
-  assert.equal(result.exporterVersion, '1.12');
+  assert.equal(result.exporterVersion, '1.13');
   const design = JSON.parse(result.json);
   assert.equal(design.frame.children.length, 2);
   assert.equal(design.frame.children[0].name, 'Null bounds');
@@ -410,7 +410,7 @@ test('complete artwork uses local render bounds and applies rotation only once, 
     const layer = design.frame.children[0];
     assert.equal(layer.width, 108); assert.equal(layer.height, 72);
     assert.deepEqual(layer.transform, [[0, -1, 206], [1, 0, 96]]);
-    assert.equal(design.exporterVersion, '1.12');
+    assert.equal(design.exporterVersion, '1.13');
   }
 });
 
@@ -500,4 +500,21 @@ test('bound color alpha is applied once for fills, strokes and styled text', asy
   await figma.ui.onmessage({ type: 'export' });
   design = JSON.parse(messages.find(message => message.type === 'result').json);
   assert.equal(design.frame.css.background, 'rgba(3,3,3,0.05)', 'variable alpha is the fallback when paint opacity is absent');
+});
+
+
+test('export normalizes Figma group-skipping relative transforms using absolute parent transforms', async () => {
+  const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
+  const messages = [];
+  const frame = { name: 'Page', type: 'FRAME', width: 500, height: 500, absoluteTransform: [[1,0,1000],[0,1,2000]], children: [] };
+  const group = { name: 'Group', type: 'GROUP', width: 200, height: 60, parent: frame, absoluteTransform: [[1,0,1020],[0,1,2030]], relativeTransform: [[1,0,20],[0,1,30]], children: [] };
+  const text = { name: 'Switch supported', type: 'TEXT', width: 160, height: 30, parent: group, absoluteTransform: [[1,0,1055],[0,1,2034]], relativeTransform: [[1,0,55],[0,1,34]], characters: 'Switch supported', getStyledTextSegments: () => [{ characters: 'Switch supported' }] };
+  frame.children.push(group); group.children.push(text);
+  const figma = { currentPage: { selection: [frame] }, showUI() {}, ui: { postMessage: message => messages.push(message) } };
+  vm.runInNewContext(code, {figma, __html__: ''});
+  await figma.ui.onmessage({type:'export'});
+  const design = JSON.parse(messages.find(message=>message.type==='result').json);
+  assert.equal(design.coordinateSpace,'parent');
+  assert.deepEqual(design.frame.children[0].transform, [[1,0,20],[0,1,30]]);
+  assert.deepEqual(design.frame.children[0].children[0].transform, [[1,0,35],[0,1,4]]);
 });

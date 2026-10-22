@@ -1,4 +1,4 @@
-const EXPORTER_VERSION = '1.12';
+const EXPORTER_VERSION = '1.13';
 figma.showUI(__html__, { width: 440, height: 560, title: `Frame to Code v${EXPORTER_VERSION}` });
 let exporting = false;
 
@@ -134,6 +134,29 @@ async function exportImageFill(node, paint, state) {
   return { data: figma.base64Encode(await image.getBytesAsync()), mode: paint.scaleMode };
 }
 
+// 2x3 affine transforms shared by Figma export and legacy JSON import.
+
+function multiply(a, b) {
+  return [
+    [a[0][0]*b[0][0]+a[0][1]*b[1][0], a[0][0]*b[0][1]+a[0][1]*b[1][1], a[0][0]*b[0][2]+a[0][1]*b[1][2]+a[0][2]],
+    [a[1][0]*b[0][0]+a[1][1]*b[1][0], a[1][0]*b[0][1]+a[1][1]*b[1][1], a[1][0]*b[0][2]+a[1][1]*b[1][2]+a[1][2]],
+  ];
+}
+function inverse(m) {
+  const det = m[0][0]*m[1][1]-m[0][1]*m[1][0];
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-12) throw new Error('Singular layer transform');
+  const a=m[1][1]/det, b=-m[0][1]/det, c=-m[1][0]/det, d=m[0][0]/det;
+  return [[a,b,-a*m[0][2]-b*m[1][2]],[c,d,-c*m[0][2]-d*m[1][2]]];
+}
+
+function parentTransform(node) {
+  const absolute = node.absoluteTransform;
+  const parent = node.parent && node.parent.absoluteTransform;
+  // absoluteTransform avoids Figma's special container-parent semantics for groups.
+  if (absolute && parent) return multiply(inverse(parent), absolute);
+  return node.relativeTransform || [[1, 0, 0], [0, 1, 0]];
+}
+
 function artworkScale(width, height) {
   return Math.min(2, 8192 / Math.max(width, height, 1), Math.sqrt(16000000 / Math.max(1, width * height)));
 }
@@ -266,7 +289,7 @@ async function exportLayer(node, root, state, depth) {
   if (node.blendMode && !['NORMAL', 'PASS_THROUGH'].includes(node.blendMode)) state.warnings.push(`Check the blend effect on "${node.name}" in the preview.`);
   const layer = {
     name: node.name, type: node.type, width: node.width, height: node.height,
-    transform: root ? [[1, 0, 0], [0, 1, 0]] : node.relativeTransform,
+    transform: root ? [[1, 0, 0], [0, 1, 0]] : parentTransform(node),
     css: {},
     clipsContent: Boolean(node.clipsContent),
   };
@@ -349,7 +372,7 @@ figma.ui.onmessage = async message => {
     state.currentLayer = ''; // Packaging errors apply to the frame, not the last visited layer.
     const assets = {};
     const assetIds = new Map();
-    const data = { format: 'figma-to-tailwind', version: 1, exporterVersion: EXPORTER_VERSION, frame, fonts: [...new Set(state.fonts)], warnings: state.warnings, assets };
+    const data = { format: 'figma-to-tailwind', version: 1, exporterVersion: EXPORTER_VERSION, coordinateSpace: 'parent', frame, fonts: [...new Set(state.fonts)], warnings: state.warnings, assets };
     if (message.includeReference) {
       try {
         const scale = Math.min(1, 8192 / Math.max(frame.width, frame.height), Math.sqrt(16000000 / (frame.width * frame.height)));

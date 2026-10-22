@@ -33,8 +33,31 @@ let index = 0;
 html = html.replace(/data-layer="/g, () => `data-check-id="${index++}" data-layer="`);
 assert.equal(index, expected.length, 'every source layer has a rendered element');
 const compiled = await postcss([tailwind({ content: [{ raw: html, extension: 'html' }], plugins: [] })]).process('@tailwind base; @tailwind utilities;', { from: undefined });
+let fontCss = '';
+const verifyFonts = process.argv.includes('--fonts');
+if (verifyFonts) {
+  const links = [...html.matchAll(/<link[^>]*href="(https:\/\/fonts\.googleapis\.com[^"<>]+)"[^>]*>/gi)].map(match=>match[1].replaceAll('&amp;','&'));
+  const fontFiles = new Map();
+  for (const link of links) {
+    const response = await fetch(link,{signal:AbortSignal.timeout(15000),headers:{'User-Agent':'Mozilla/5.0 Chrome/130.0.0.0 Safari/537.36'}});
+    if (!response.ok) throw new Error('Could not fetch the exported Google font CSS.');
+    let css = await response.text();
+    const urls = [...new Set([...css.matchAll(/url\((https:\/\/fonts\.gstatic\.com[^)]+)\)/g)].map(match=>match[1]))];
+    await Promise.all(urls.map(async url=>{
+      if(fontFiles.has(url)) return;
+      const response=await fetch(url,{signal:AbortSignal.timeout(15000)});
+      if(!response.ok)throw new Error('Could not fetch an exported font file.');
+      const bytes=Buffer.from(await response.arrayBuffer());
+      if(bytes.length>2*1024*1024)throw new Error('Font file too large.');
+      fontFiles.set(url,`data:font/woff2;base64,${bytes.toString('base64')}`);
+    }));
+    for(const url of urls)css=css.split(url).join(fontFiles.get(url));
+    fontCss += css;
+  }
+  console.log('Bundled exported Google fonts for the visual check.');
+}
 html = html.replace(/<link\b[^>]*fonts\.googleapis\.com[^>]*>/gi, '');
-html = html.replace(/<script[^>]*src="https:\/\/cdn.tailwindcss.com"[^>]*><\/script>/, '').replace('</head>', `<style>${compiled.css}</style></head>`);
+html = html.replace(/<script[^>]*src="https:\/\/cdn.tailwindcss.com"[^>]*><\/script>/, '').replace('</head>', `<style>${compiled.css}\n${fontCss}</style></head>`);
 await fs.writeFile(path.join(outputDir,'generated.html'), html);
 const ref = input.design.reference;
 const referenceHtml = ref ? `<html><body style="margin:0"><img src="data:image/png;base64,${ref.image}" style="display:block;width:${ref.width}px;height:${ref.height}px"></body></html>` : '';
@@ -76,14 +99,17 @@ try {
   await call('Runtime.enable');
   await call('Page.bringToFront');
   await call('Emulation.setFocusEmulationEnabled',{enabled:true});
-  console.log('Rendering local assets; external fonts blocked for deterministic geometry audit.');
+  console.log(verifyFonts ? 'Rendering with bundled source fonts.' : 'Rendering local assets; typography not scored.');
   const frame = input.design.frame;
   await call('Emulation.setDeviceMetricsOverride',{width:frame.width,height:900,deviceScaleFactor:1,mobile:false});
   const base = `http://127.0.0.1:${server.address().port}`;
   await call('Page.navigate',{url:base});
   console.log('Design page committed.');
   await waitFor(`document.querySelectorAll('[data-check-id]').length === ${expected.length} && Array.from(document.images).every(image=>image.complete)`);
-  // Geometry audit uses fixed exported text boxes; external font fidelity is not scored.
+  if (verifyFonts) {
+    const loaded = await call('Runtime.evaluate',{expression:'document.fonts.ready.then(()=>document.fonts.status)',awaitPromise:true,returnByValue:true});
+    assert.equal(loaded.result.value,'loaded');
+  }
   console.log('Local images loaded; auditing source geometry.');
   const actual=await evaluate(`Array.from(document.querySelectorAll('[data-check-id]')).map(el=>{const r=el.getBoundingClientRect();const style=getComputedStyle(el);return {id:Number(el.dataset.checkId), x:r.x,y:r.y,width:r.width,height:r.height,tag:el.tagName,text:el.textContent, color:style.color, opacity:style.opacity, naturalWidth:el.tagName==='IMG'?el.naturalWidth:undefined};})`);
   // The document scrollbar reduces available width; the page intentionally
@@ -92,15 +118,23 @@ try {
   const discrepancies = actual.map(row=>({ ...expected[row.id], actual:row, delta:Math.max(...['x','y','width','height'].map(k=>Math.abs((row[k] - (k==='x' ? actual[0].x : k==='y' ? actual[0].y : 0)) / renderedScale-expected[row.id][k]))) })).filter(row=>row.delta>1);
 
   const brokenImages=actual.filter(row=>row.tag==='IMG'&&!row.naturalWidth);
-  const report={ renderedScale, externalFonts: 'blocked; typography not scored', layers:expected.length, assets:result.files.length, exporterVersion:input.design.exporterVersion, warnings:result.warnings, geometryDiscrepancies:discrepancies, brokenImages, browserErrors:errors };
+  const report={ renderedScale, externalFonts: verifyFonts ? 'bundled and loaded' : 'not loaded; typography not scored', layers:expected.length, assets:result.files.length, exporterVersion:input.design.exporterVersion, warnings:result.warnings, geometryDiscrepancies:discrepancies, brokenImages, browserErrors:errors };
   await fs.writeFile(path.join(outputDir,'report.json'),JSON.stringify(report,null,2));
-  let shot=await call('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width:frame.width,height:frame.height,scale:1}});
-  await fs.writeFile(path.join(outputDir,'generated.png'),Buffer.from(shot.data,'base64'));
+  const regionIndex = process.argv.indexOf('--regions');
+  const regions = regionIndex >= 0 ? JSON.parse(process.argv[regionIndex + 1]) : [[0,0,frame.width,frame.height]];
+  async function captureRegions(prefix, scale) {
+    for (const [index, region] of regions.entries()) {
+      const [x,y,width,height]=region;
+      await evaluate(`window.scrollTo(0,${y*scale})`);
+      const shot=await call('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:x*scale,y:y*scale,width:width*scale,height:height*scale,scale:1/scale}});
+      await fs.writeFile(path.join(outputDir,regions.length===1?`${prefix}.png`:`${prefix}-${index+1}.png`),Buffer.from(shot.data,'base64'));
+    }
+  }
+  await captureRegions('generated',renderedScale);
   if(ref){
     await call('Page.navigate',{url:`${base}/reference`});
     await waitFor('!!document.images[0]?.complete && document.images[0].naturalWidth > 0');
-    shot=await call('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width:frame.width,height:frame.height,scale:1}});
-    await fs.writeFile(path.join(outputDir,'reference.png'),Buffer.from(shot.data,'base64'));
+    await captureRegions('reference',1);
   }
   console.log(JSON.stringify({layers:expected.length,assets:result.files.length,geometryDiscrepancies:discrepancies.length,brokenImages:brokenImages.length,outputDir}));
 }finally{

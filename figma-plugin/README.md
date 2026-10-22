@@ -1,5 +1,7 @@
 # Frame to Code: copy Figma layers
 
+v1.13 writes transforms relative to the immediate parent by calculating inverse(parent.absoluteTransform) ? node.absoluteTransform. Figma relativeTransform skips GROUP/BOOLEAN_OPERATION parents, so using it directly had applied group offsets twice. The export now includes coordinateSpace: parent. The app also normalizes unmarked v1.10?v1.12 exports automatically on import.
+
 v1.12 applies bound paint alpha once. SolidPaint.opacity already carries the effective transparency; multiplying it by the COLOR variable alpha made 5% backgrounds become 0.25%, hiding secondary buttons, radio controls, text areas and select backgrounds. Re-export for accurate transparent styles.
 
 v1.11 fixes variable modes in dynamic-page/incremental documents: collection IDs are resolved with getVariableCollectionByIdAsync, and collection objects are passed to setExplicitVariableModeForCollection. Image paints, artwork viewports and clones all await mode inheritance. Collections are cached per export; paint caches distinguish variable modes.

@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { normalizeLayerCoordinates } from './layerCoordinates.js';
 import { ApiError } from '../utils/ApiError.js';
 import { gunzip } from 'node:zlib';
 import { promisify } from 'node:util';
@@ -41,6 +42,7 @@ export async function prepareInput(file, label) {
         }
         if (Array.isArray(node.children)) for (const child of node.children) pending.push({ node: child, depth: depth + 1 });
       }
+      normalizeLayerCoordinates(design);
       delete design.assets;
       return { label, kind: 'layers', design };
     } catch {
