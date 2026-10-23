@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://figma-to-tailwind-web-nedo.vercel.app/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
