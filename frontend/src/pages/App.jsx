@@ -152,7 +152,7 @@ export default function App({ user, onLogout, signingOut }) {
             {result?.warnings?.length > 0 && <div className="border-t border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">{result.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div>}
           </section>
         </div>
-        <footer className="mt-6 flex flex-wrap justify-between gap-2 text-[10px] leading-5 text-slate-400"><span>Made from your layers. Made for the web.</span><span>Frame to Code · Your private workspace</span></footer>
+        <footer className="mt-6 flex flex-wrap justify-between gap-2 text-[10px] leading-5 text-slate-400"><span>Made from your layers. Made for the web.</span><span>Frame to Code · Your private workspace · <a href="https://github.com/shandiru" target="_blank" rel="noreferrer" className="font-medium text-slate-500 hover:text-violet-700">Developed by Dirushan</a></span></footer>
       </main>
     </div>
     <Toasts toasts={toasts}/>
