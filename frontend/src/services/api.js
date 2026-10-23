@@ -15,8 +15,8 @@ export async function fetchHistory() {
   return res.json();
 }
 
-export async function fetchActiveUsers() {
-  const res = await apiFetch('/auth/admin/users');
+export async function fetchAdminDashboard() {
+  const res = await apiFetch('/auth/admin/dashboard');
   return res.json();
 }
 

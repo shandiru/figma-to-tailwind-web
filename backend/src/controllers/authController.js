@@ -1,5 +1,5 @@
 import { User } from '../models/User.js';
-import { AuthChallenge, AuthSession } from '../models/Auth.js';
+import { AuditLog, AuthChallenge, AuthSession } from '../models/Auth.js';
 import { emailService } from '../services/emailService.js';
 import { checkPassword, hashPassword, newOtp, normalizeEmail, opaqueToken, otpHash, publicUser, safeEqual, tokenHash, validatePassword } from '../services/authSecurity.js';
 import { COOKIE_NAME, SESSION_MS, consumeLimit, cookieOptions, sessionToken } from '../middleware/auth.js';
@@ -7,6 +7,11 @@ import { ApiError, asyncHandler } from '../utils/ApiError.js';
 import { env } from '../config/env.js';
 
 const TEN_MINUTES = 10 * 60 * 1000;
+async function recordAudit(action, actor = {}, target = {}) {
+  try {
+    await AuditLog.create({ action, actorUserId: actor.id || null, actorEmail: actor.email || 'unknown', targetUserId: target.id || null, targetEmail: target.email || null });
+  } catch (error) { console.error('Could not write audit event:', error.message); }
+}
 const sendLimits = async email => {
   await consumeLimit(`email-minute:${email}`, 1, 60000);
   await consumeLimit(`email-hour:${email}`, 5, 60 * 60 * 1000);
@@ -49,8 +54,9 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   const consumed = await AuthChallenge.findOneAndDelete({ _id: challengeId, otpHash: challenge.otpHash, expiresAt: { $gt: new Date() } });
   if (!consumed) throw new ApiError(400, 'This code has already been used. Please sign in.');
   let user;
-  try { user = await User.create({ name: challenge.name, email: challenge.email, passwordHash: challenge.passwordHash, verifiedAt: new Date(), role: challenge.role || 'user' }); }
+  try { user = await User.create({ name: challenge.name, email: challenge.email, passwordHash: challenge.passwordHash, verifiedAt: new Date(), lastLoginAt: new Date(), role: challenge.role || 'user' }); }
   catch (error) { if (error.code === 11000) throw new ApiError(409, 'Unable to create this account. Please sign in instead.'); throw error; }
+  await recordAudit('account.verified', { id: user._id, email: user.email });
   await startSession(req, res, user);
 });
 export const resendCode = asyncHandler(async (req, res) => {
@@ -75,15 +81,38 @@ export const login = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email }).select('+passwordHash');
   dummyPassword ||= hashPassword(opaqueToken());
   const valid = await checkPassword(password, user?.passwordHash || await dummyPassword);
-  if (!user?.verifiedAt || !valid) throw new ApiError(401, 'Email or password is incorrect.');
+  if (!user?.verifiedAt || !valid) {
+    await recordAudit('auth.login_failed', { email });
+    throw new ApiError(401, 'Email or password is incorrect.');
+  }
+  user.lastLoginAt = new Date();
+  await user.save();
+  await recordAudit('auth.login', { id: user._id, email: user.email });
   await startSession(req, res, user);
 });
 export const currentUser = (req, res) => res.json({ user: publicUser(req.user), csrfToken: req.authSession.csrfToken });
-export const activeUsers = asyncHandler(async (_req, res) => {
-  const users = await User.find({ verifiedAt: { $exists: true, $ne: null } }).select('name email role createdAt verifiedAt').sort({ createdAt: -1 }).lean();
-  res.json({ users: users.map(user => ({ id: String(user._id), name: user.name, email: user.email, role: user.role || 'user', joinedAt: user.createdAt, verifiedAt: user.verifiedAt })) });
+export const adminDashboard = asyncHandler(async (req, res) => {
+  const now = new Date();
+  const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const [totalUsers, totalAdmins, recentSignups, liveSessions, users] = await Promise.all([
+    User.countDocuments({ verifiedAt: { $exists: true, $ne: null } }),
+    User.countDocuments({ verifiedAt: { $exists: true, $ne: null }, role: 'superadmin' }),
+    User.countDocuments({ verifiedAt: { $exists: true, $ne: null }, createdAt: { $gte: monthAgo } }),
+    AuthSession.find({ expiresAt: { $gt: now } }).select('userId').lean(),
+    User.find({ verifiedAt: { $exists: true, $ne: null } }).select('name email role createdAt verifiedAt lastLoginAt').sort({ createdAt: -1 }).lean(),
+  ]);
+  const activeIds = new Set(liveSessions.map(session => String(session.userId)));
+  const activeUserCount = activeIds.size;
+  await recordAudit('admin.dashboard_viewed', { id: req.user._id, email: req.user.email });
+  const activity = await AuditLog.find().sort({ createdAt: -1 }).limit(50).lean();
+  res.json({
+    summary: { totalUsers, activeUsers: activeUserCount, totalAdmins, recentSignups },
+    users: users.map(user => ({ id: String(user._id), name: user.name, email: user.email, role: user.role || 'user', joinedAt: user.createdAt, verifiedAt: user.verifiedAt, lastLoginAt: user.lastLoginAt, hasActiveSession: activeIds.has(String(user._id)) })),
+    activity: activity.map(event => ({ id: String(event._id), action: event.action, actorEmail: event.actorEmail, targetEmail: event.targetEmail, createdAt: event.createdAt })),
+  });
 });
 export const logout = asyncHandler(async (req, res) => {
+  await recordAudit('auth.logout', { id: req.user._id, email: req.user.email });
   await AuthSession.deleteOne({ _id: req.authSession._id });
   const { maxAge: _maxAge, ...options } = cookieOptions();
   res.clearCookie(COOKIE_NAME, options);

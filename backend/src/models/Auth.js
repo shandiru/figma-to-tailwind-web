@@ -22,7 +22,16 @@ const throttleSchema = new mongoose.Schema({
   count: { type: Number, default: 0 },
   expiresAt: { type: Date, required: true, expires: 0 },
 });
+const auditLogSchema = new mongoose.Schema({
+  action: { type: String, required: true, maxlength: 80 },
+  actorUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  actorEmail: { type: String, required: true, maxlength: 254 },
+  targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  targetEmail: { type: String, maxlength: 254, default: null },
+}, { timestamps: { createdAt: true, updatedAt: false } });
+auditLogSchema.index({ createdAt: -1 });
 
 export const AuthChallenge = mongoose.model('AuthChallenge', challengeSchema);
 export const AuthSession = mongoose.model('AuthSession', sessionSchema);
 export const AuthThrottle = mongoose.model('AuthThrottle', throttleSchema);
+export const AuditLog = mongoose.model('AuditLog', auditLogSchema);

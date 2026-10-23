@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
 import { env } from './env.js';
 import { User } from '../models/User.js';
-import { AuthChallenge, AuthSession, AuthThrottle } from '../models/Auth.js';
+import { AuditLog, AuthChallenge, AuthSession, AuthThrottle } from '../models/Auth.js';
 
-export function createDatabaseConnector({ client = mongoose, models = [User, AuthChallenge, AuthSession, AuthThrottle], getUri = () => env.mongoUri } = {}) {
+export function createDatabaseConnector({ client = mongoose, models = [User, AuthChallenge, AuthSession, AuthThrottle, AuditLog], getUri = () => env.mongoUri } = {}) {
   let connecting;
   let indexes;
   return async function ensureConnected() {

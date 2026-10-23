@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true, select: false },
   verifiedAt: { type: Date, required: true },
   role: { type: String, enum: ['user', 'superadmin'], default: 'user', required: true },
+  lastLoginAt: { type: Date, default: null },
 }, { timestamps: true });
 
 export const User = mongoose.model('User', userSchema);
