@@ -5,6 +5,7 @@ const challengeSchema = new mongoose.Schema({
   name: String,
   email: { type: String, required: true },
   passwordHash: { type: String, required: true, select: false },
+  role: { type: String, enum: ['user', 'superadmin'], default: 'user' },
   otpHash: { type: String, required: true, select: false },
   attempts: { type: Number, default: 0 },
   resendAfter: Date,

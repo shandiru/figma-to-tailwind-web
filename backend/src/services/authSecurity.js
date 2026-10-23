@@ -39,4 +39,4 @@ export async function checkPassword(value, stored) {
   const actual = await derive(value, salt, 64, SCRYPT);
   return timingSafeEqual(actual, Buffer.from(digest, 'hex'));
 }
-export const publicUser = user => ({ id: String(user._id), name: user.name, email: user.email });
+export const publicUser = user => ({ id: String(user._id), name: user.name, email: user.email, role: user.role || 'user' });

@@ -15,6 +15,11 @@ export async function fetchHistory() {
   return res.json();
 }
 
+export async function fetchActiveUsers() {
+  const res = await apiFetch('/auth/admin/users');
+  return res.json();
+}
+
 export const downloadUrl = (id) => `${API_BASE}/history/${id}/download`;
 
 export async function previewLayerFile(file) {

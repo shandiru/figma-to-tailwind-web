@@ -1,6 +1,7 @@
 const paths = {
   grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
   history: 'M3 11a9 9 0 1 1 2.6 7M3 4v7h7M12 7v5l3 2',
+  users: 'M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m12-13a4 4 0 1 1 0 8m4 5v-2a4 4 0 0 0-3-3.87M10 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
   layers: 'm12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5',
   upload: 'M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6',
   download: 'M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4',

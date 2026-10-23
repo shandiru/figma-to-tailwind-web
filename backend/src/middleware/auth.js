@@ -21,6 +21,10 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   next();
 });
+export const requireSuperAdmin = (req, _res, next) => {
+  if (req.user?.role !== 'superadmin') return next(new ApiError(403, 'Super Admin access is required.'));
+  next();
+};
 export function checkOrigin(req, _res, next) {
   if (req.headers.origin && !env.clientOrigins.includes(req.headers.origin)) return next(new ApiError(403, 'This request origin is not allowed.'));
   next();

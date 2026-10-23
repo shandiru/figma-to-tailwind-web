@@ -5,6 +5,7 @@ import { authRequest, setCsrfToken } from '../services/http.js';
 import Brand from '../components/Brand.jsx';
 
 export default function Root() {
+  const superAdminRegistration = window.location.pathname === '/super-admin/register';
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
@@ -38,5 +39,5 @@ export default function Root() {
     finally { setSigningOut(false); }
   };
   if (loading) return <main className="grid min-h-screen place-items-center bg-[#fafaf8]"><div className="space-y-6 text-center"><Brand/><p role="status" className="text-xs text-slate-500">Opening your workspace…</p></div></main>;
-  return user ? <><App key={user.id} user={user} onLogout={logout} signingOut={signingOut}/>{notice && <div role="alert" className="fixed bottom-5 left-5 right-5 border border-red-200 bg-white p-4 text-sm text-red-700 shadow-lg">{notice}</div>}</> : <AuthPage notice={notice} onAuthenticated={value => { authRevision.current++; setNotice(''); setUser(value); }}/>;
+  return user ? <><App key={user.id} user={user} onLogout={logout} signingOut={signingOut}/>{notice && <div role="alert" className="fixed bottom-5 left-5 right-5 border border-red-200 bg-white p-4 text-sm text-red-700 shadow-lg">{notice}</div>}</> : <AuthPage superAdminRegistration={superAdminRegistration} notice={notice} onAuthenticated={value => { authRevision.current++; setNotice(''); setUser(value); }}/>;
 }

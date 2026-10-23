@@ -12,6 +12,7 @@ export const env = {
   smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
   smtpPort: Number(process.env.SMTP_PORT) || 465,
   authSecret: process.env.AUTH_SECRET,
+  superAdminCreateKeyword: process.env.SUPER_ADMIN_CREATE_KEYWORD,
   secureCookies: process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL),
   cookieSameSite: process.env.COOKIE_SAME_SITE === 'none' ? 'none' : 'lax',
   maxFileMb: Number(process.env.MAX_FILE_MB) || 128,
