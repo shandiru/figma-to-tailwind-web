@@ -1,4 +1,4 @@
-import { identity, inverse, multiply } from '../../../shared/affine.js';
+import { identity, inverse, multiply } from '../utils/affine.js';
 
 /** v1.10-v1.12 used Figma container-relative transforms as direct-parent transforms. */
 export function normalizeLayerCoordinates(design) {

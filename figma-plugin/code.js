@@ -1,4 +1,4 @@
-const EXPORTER_VERSION = '1.13';
+const EXPORTER_VERSION = '1.14';
 figma.showUI(__html__, { width: 440, height: 560, title: `Frame to Code v${EXPORTER_VERSION}` });
 let exporting = false;
 
@@ -388,7 +388,7 @@ figma.ui.onmessage = async message => {
       }
       return value;
     });
-    if (json.length > 96 * 1024 * 1024) throw new Error('Frame data exceeds 96 MB after artwork deduplication. Export this exceptionally large frame in sections.');
+    if (json.length > 256 * 1024 * 1024) throw new Error('Frame data exceeds 256 MB after artwork deduplication. Export this exceptionally large frame in sections.');
     figma.ui.postMessage({ type: 'result', json, name: frame.name, width: frame.width, height: frame.height, count: state.count, exporterVersion: EXPORTER_VERSION });
   } catch (error) {
     const detail = `[v${EXPORTER_VERSION}] ${state.currentLayer ? `Layer "${state.currentLayer}": ` : ''}${errorMessage(error)}`;

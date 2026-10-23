@@ -1,7 +1,7 @@
 import { inflateRawSync } from 'node:zlib';
 import { Decompress } from 'fzstd';
 import { ByteBuffer, decodeBinarySchema } from 'kiwi-schema';
-import { figmaPayload } from '../../../shared/figmaClipboard.js';
+import { figmaPayload } from '../utils/figmaClipboard.js';
 
 const LIMIT = 64 * 1024 * 1024;
 function unpack(bytes) {

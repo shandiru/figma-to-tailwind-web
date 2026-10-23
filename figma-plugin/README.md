@@ -33,4 +33,4 @@ The converter retains absolute layer geometry and scales each frame to fit. Supp
 
 v1.3 stores repeated artwork once and compresses large exports with gzip when supported by the plugin browser. The converter accepts both ordinary and packed JSON. Large clipboard writes may be blocked by the browser; use Download JSON and upload the file in that case.
 
-Limits are 3,000 layers, 96 MB of deduplicated JSON, and 48 MB after packing per frame. Backend uploads default to 50 MB; restart the backend after updating MAX_FILE_MB. Oversized frames can be exported in sections. Text and layer structure remain editable through packing.
+Limits are 3,000 layers, 256 MB of deduplicated JSON, and 128 MB after packing per frame. Backend uploads default to 128 MB; restart the backend after updating MAX_FILE_MB. Oversized frames can be exported in sections. Text and layer structure remain editable through packing.

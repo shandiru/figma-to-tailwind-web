@@ -8,7 +8,8 @@ export const pasteClipboard = asyncHandler(async (req, res) => {
   const html = req.body?.html;
   const layers = req.body?.layers;
   const data = layers ?? html;
-  if (typeof data !== 'string' || !data || data.length > 48 * 1024 * 1024) throw new ApiError(400, 'Paste a Figma selection smaller than 48 MB.');
+  const maxMb = layers != null ? 128 : 48;
+  if (typeof data !== 'string' || !data || Buffer.byteLength(data, 'utf8') > maxMb * 1024 * 1024) throw new ApiError(413, `Import a design smaller than ${maxMb} MB.`);
   if (active >= 2) throw new ApiError(429, 'Other clipboard imports are running. Try again in a moment.');
   active++;
   try {

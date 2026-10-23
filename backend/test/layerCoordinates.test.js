@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { normalizeLayerCoordinates } from '../src/services/layerCoordinates.js';
-import { multiply } from '../../shared/affine.js';
+import { multiply } from '../src/utils/affine.js';
 const t = (x, y) => [[1,0,x],[0,1,y]];
 
 test('legacy group children are converted from containing-frame coordinates exactly once', () => {

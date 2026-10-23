@@ -49,6 +49,26 @@ test('Copy complete design exports original layer data and copies it without a J
   assert.equal(elements.complete.disabled, false);
 });
 
+test('plugin retains exports above the former 48 MB limit for JSON download', async () => {
+  const html = await readFile(new URL('../../figma-plugin/ui.html', import.meta.url), 'utf8');
+  const elements = Object.fromEntries(['status', 'data', 'export', 'copy', 'download', 'complete'].map(id => [id, { disabled: true, value: '', className: '' }]));
+  const context = vm.createContext({ Blob, document: { getElementById: id => elements[id] }, parent: { postMessage() {} } });
+  vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
+  const json = JSON.stringify({ format: 'figma-to-tailwind', version: 1, frame: { name: 'Large frame' }, artwork: 'A'.repeat(49 * 1024 * 1024) });
+  await context.onmessage({ data: { pluginMessage: { type: 'result', json, name: 'Large frame', count: 1 } } });
+  assert.equal(elements.download.disabled, false);
+  assert.equal(elements.copy.disabled, false);
+  assert.match(elements.status.textContent, /49\.00 MB ready/);
+  assert.ok(elements.data.value.length < 1024, 'Large exports must stay out of the textarea');
+  assert.equal(vm.runInContext('exportPayload', context), json);
+});
+
+test('deployed plugin bundle stays in sync with the editable plugin source', async () => {
+  for (const file of ['manifest.json', 'code.js', 'ui.html', 'README.md']) {
+    assert.equal(await readFile(new URL(`../figma-plugin/${file}`, import.meta.url), 'utf8'), await readFile(new URL(`../../figma-plugin/${file}`, import.meta.url), 'utf8'));
+  }
+});
+
 test('plugin exports live text and containers while limiting artwork exports to leaves', async () => {
   const code = await readFile(new URL('../../figma-plugin/code.js', import.meta.url), 'utf8');
   const messages = [];
@@ -184,11 +204,11 @@ test('handles Figma string rejections and attempts export before discarding null
   };
   vm.runInNewContext(code, { figma, __html__: '' });
   await figma.ui.onmessage({ type: 'ready' });
-  assert.equal(messages[0].version, '1.13');
+  assert.equal(messages[0].version, '1.14');
   await figma.ui.onmessage({ type: 'export' });
   const result = messages.find(message => message.type === 'result');
   assert.ok(result, JSON.stringify(messages));
-  assert.equal(result.exporterVersion, '1.13');
+  assert.equal(result.exporterVersion, '1.14');
   const design = JSON.parse(result.json);
   assert.equal(design.frame.children.length, 2);
   assert.equal(design.frame.children[0].name, 'Null bounds');
@@ -410,7 +430,7 @@ test('complete artwork uses local render bounds and applies rotation only once, 
     const layer = design.frame.children[0];
     assert.equal(layer.width, 108); assert.equal(layer.height, 72);
     assert.deepEqual(layer.transform, [[0, -1, 206], [1, 0, 96]]);
-    assert.equal(design.exporterVersion, '1.13');
+    assert.equal(design.exporterVersion, '1.14');
   }
 });
 

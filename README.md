@@ -33,7 +33,7 @@ Plugin v1.13 normalizes group transforms to immediate-parent coordinates. Figma 
 ## Upload complete JSON and select sections
 
 1. Import the updated `figma-plugin/manifest.json` in Figma. Run **Frame to Code v1.13** on your frame, click **Export complete JSON**, then **Download JSON**.
-2. Open **Upload JSON** in the app and upload your desktop file. The rendered design and layer list open immediately. Repeat for the mobile file if needed. Ordinary and gzip-packed exports are supported, up to 48 MB each.
+2. Open **Upload JSON** in the app and upload your desktop file. The rendered design and layer list open immediately. Repeat for the mobile file if needed. Ordinary and gzip-packed exports are supported, up to 128 MB each.
 3. Toggle **Figma original / Generated HTML** to compare the source with the actual HTML rendering. Choose the corresponding sections on each canvas. The original upload stays available while changing sections; replacing one version preserves the other version.
 4. Build and download the HTML ZIP. Invalid replacement files leave your last valid design intact. Assets are encoded as lossless WebP. Missing assets cannot be reconstructed from a JSON file that does not include them; custom fonts must be available in the browser.
 
@@ -74,16 +74,24 @@ The renderer preserves measured layer positions using Tailwind utilities only, w
 
 With both frames, base and sm (640px) use the mobile geometry; md (768px), lg (1024px), xl (1280px) and 2xl (1536px) use the desktop geometry. All five breakpoint variants appear explicitly in generated HTML. Layouts scale fluidly between these widths and preserve source measurements at each original frame width. Supplying both exports is necessary to reproduce both designs. Frame dimensions come directly from the export. Complex masks, blends, image crops and custom font metrics may need manual adjustment. Available fonts load via Google Fonts; custom fonts must be installed or supplied separately. Tailwind and Google Fonts require internet in the exported page. Conversion itself makes no external API calls. The preview includes all breakpoint widths plus the original desktop/mobile widths; the Code tab supports wrapping on small screens.
 
-Plugin v1.3 deduplicates artwork and compresses large exports with gzip. It supports 3,000 layers, nesting depth 50, 96 MB before packing, and 48 MB after packing per frame. The backend accepts files up to MAX_FILE_MB (50 MB default), and decompresses at most 128 MB. Both regular and packed JSON work with paste and file upload. Use Download JSON if the browser cannot copy a large payload. ZIPs contain index.html, README.md, conversion.json (counts and warnings), and artwork assets.
+Plugin v1.3 deduplicates artwork and compresses large exports with gzip. It supports 3,000 layers, nesting depth 50, 256 MB before packing, and 128 MB after packing per frame. The backend accepts files up to MAX_FILE_MB (128 MB default), and decompresses at most 256 MB. Both regular and packed JSON work with paste and file upload. Use Download JSON if the browser cannot copy a large payload. ZIPs contain index.html, README.md, conversion.json (counts and warnings), and artwork assets.
 
 ## Backend environment
+
+### Separate deployments
+
+The `backend` and `frontend` directories can each be deployed independently. Their runtime helpers are inside each project; neither requires the root `shared` directory. The backend includes a copy of the Figma plugin in `backend/figma-plugin` so `/api/plugin` also works when only the backend folder is deployed. After changing the root plugin, copy its four files into `backend/figma-plugin` before deploying.
+
+Plugin v1.14 raises the packed export/import limit to 128 MB and the unpacked limit to 256 MB without changing artwork quality. Re-import the updated plugin manifest in Figma, or download the plugin from the redeployed backend. Set `MAX_FILE_MB=128` in the backend hosting environment; existing environment overrides still take precedence.
+
+Vercel Functions limit request and response bodies to 4.5 MB: https://vercel.com/docs/functions/limitations#request-body-size. Increasing these application limits cannot raise that platform limit. Large uploads and previews require a backend host that supports larger HTTP bodies, or a separate object-storage upload/download flow. A frontend hosted on Vercel can call such a backend via `VITE_API_URL`, with the frontend origin in the backend's `CLIENT_URL`.
 
 | Variable | Purpose |
 |---|---|
 | PORT | API port (default 5000) |
 | MONGO_URI | MongoDB connection string |
 | CLIENT_URL | Allowed CORS origin (default http://localhost:5173) |
-| MAX_FILE_MB | Per-file upload limit (default 50) |
+| MAX_FILE_MB | Per-file upload limit (default 128) |
 | FIGMA_ACCESS_TOKEN | Optional server token for Figma link import; requires file_content:read |
 
 Frontend VITE_API_URL defaults to /api, proxied to the backend by Vite.

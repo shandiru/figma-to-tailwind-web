@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}body{font:13px Inter,system-ui,sans-serif;color:#172135;padding:20px;margin:0;background:#f8fafc}h1{font-size:22px;letter-spacing:-.7px;margin:10px 0}p{line-height:1.6;color:#64748b}button{border:0;border-radius:9px;padding:12px 16px;font:inherit;font-weight:600;cursor:pointer;background:#6554ed;color:white;width:100%;margin:4px 0}button:disabled{opacity:.5;cursor:not-allowed}.secondary{background:#e9e7fc;color:#5141bb}textarea{width:100%;height:80px;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font:11px monospace;margin-top:10px}#status{min-height:48px;padding:10px 12px;border:1px solid #e2e8f0;background:white;border-radius:8px;overflow-wrap:anywhere}#status.error{color:#b42318;background:#fff0ef;border-color:#fecdca}small{color:#6554ed;font-weight:600;letter-spacing:1px}
+</style></head><body>
+<small id="version">FRAME TO CODE · UI v1.14</small><h1>Your layers. Real HTML.</h1>
+<p>Select one desktop or mobile frame. Export its text, geometry, colors and artwork, then paste the layers into the converter.</p>
+<p id="status" role="status" aria-live="polite">Select one visible frame, then export.</p>
+<button id="complete">Copy complete design</button>
+<button id="export" class="secondary">Export complete JSON</button>
+<button id="copy" class="secondary" disabled>Copy layers</button>
+<button id="download" class="secondary" disabled>Download JSON</button>
+<textarea id="data" readonly placeholder="Your exported layers will appear here" aria-label="Exported layer JSON"></textarea>
+<script>
+const data = document.getElementById('data');
+const statusBox = document.getElementById('status');
+const exportButton = document.getElementById('export');
+const copyButton = document.getElementById('copy');
+const downloadButton = document.getElementById('download');
+const completeButton = document.getElementById('complete');
+let exportPayload = '';
+let copyAfterExport = false;
+function base64(bytes) {
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 32768) binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
+  return btoa(binary);
+}
+async function prepareExport(message) {
+  const blob = new Blob([message.json], { type: 'application/json' });
+  if (blob.size > 256 * 1024 * 1024) throw new Error('Frame data exceeds 256 MB. Export this exceptionally large frame in sections.');
+  if (blob.size <= 1024 * 1024 || typeof CompressionStream === 'undefined') return message.json;
+  const compressed = await new Response(blob.stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+  const packed = JSON.stringify({
+    format: 'figma-to-tailwind-packed', version: 1, encoding: 'gzip-base64',
+    frame: { name: message.name, width: message.width, height: message.height }, count: message.count,
+    data: base64(new Uint8Array(compressed)),
+  });
+  return packed.length < blob.size ? packed : message.json;
+}
+function beginExport(autoCopy) {
+  copyAfterExport = autoCopy;
+  statusBox.className = '';
+  data.value = '';
+  exportPayload = '';
+  exportButton.disabled = true; copyButton.disabled = true; downloadButton.disabled = true;
+  if (completeButton) completeButton.disabled = true;
+  statusBox.textContent = 'Reading your frame and exporting artwork...';
+  parent.postMessage({ pluginMessage: { type: 'export', rasterArtwork: true, includeReference: true } }, '*');
+}
+exportButton.onclick = () => beginExport(false);
+if (completeButton) completeButton.onclick = () => beginExport(true);
+onmessage = async event => {
+  const message = event.data.pluginMessage;
+  if (!message) return;
+  if (message.type === 'version') {
+    document.getElementById('version').textContent = `FRAME TO CODE · exporter v${message.version}`;
+    if (message.version !== '1.14') { statusBox.textContent = 'Exporter and UI versions differ. Re-import this project’s figma-plugin/manifest.json in Figma.'; statusBox.className = 'error'; }
+    return;
+  }
+  if (message.type === 'progress') { statusBox.textContent = `Reading layer ${message.count}: ${message.name}`; return; }
+  if (!['error', 'result'].includes(message.type)) return;
+  if (message.type === 'error') { exportButton.disabled = false; if (completeButton) completeButton.disabled = false; statusBox.textContent = message.message; statusBox.className = 'error'; return; }
+  statusBox.textContent = 'Packing your layers and compressing artwork...';
+  try {
+    exportPayload = await prepareExport(message);
+    const size = new Blob([exportPayload]).size;
+    if (size > 128 * 1024 * 1024) throw new Error('Packed export exceeds 128 MB. Export this exceptionally large frame in sections.');
+    // Keep large payloads out of the textarea to avoid freezing the plugin UI.
+    data.value = size <= 1024 * 1024 ? exportPayload : `${message.name}: ${(size / 1048576).toFixed(1)} MB. Use Copy layers or Download JSON below. Full data is retained.`;
+    copyButton.disabled = false; downloadButton.disabled = false;
+    statusBox.textContent = `${message.name} · ${message.count} layers · ${(size / 1048576).toFixed(2)} MB ready. Copy layers or download JSON to upload.`;
+    if (copyAfterExport) await copyLayers();
+  } catch (error) {
+    exportPayload = ''; copyButton.disabled = true; downloadButton.disabled = true;
+    statusBox.textContent = error.message; statusBox.className = 'error';
+  } finally { exportButton.disabled = false; if (completeButton) completeButton.disabled = false; copyAfterExport = false; }
+};
+async function copyLayers() {
+  try { await navigator.clipboard.writeText(exportPayload); statusBox.textContent = 'Copied with artwork! In the app, use Paste design, then choose your section.'; }
+  catch {
+    if (exportPayload.length > 1024 * 1024) { statusBox.textContent = 'Full design is ready. Click Copy layers to retry with clipboard permission. If the browser still blocks copying, Download JSON is available.'; return; }
+    data.value = exportPayload;
+    data.focus(); data.select();
+    statusBox.textContent = document.execCommand('copy') ? 'Copied! Paste into the app.' : 'Press Ctrl/Cmd+C to copy the selected layers, or download JSON.';
+  }
+}
+copyButton.onclick = copyLayers;
+downloadButton.onclick = () => {
+  const url = URL.createObjectURL(new Blob([exportPayload], { type: 'application/json' }));
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'figma-layers.json'; anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+parent.postMessage({ pluginMessage: { type: 'ready' } }, '*');
+</script></body></html>

@@ -12,10 +12,10 @@ router.get('/plugin', (_req, res, next) => {
   const archive = archiver('zip', { zlib: { level: 9 } });
   archive.on('error', next);
   res.setHeader('Cache-Control', 'no-store');
-  res.attachment('frame-to-code-plugin-v1.13.zip');
+  res.attachment('frame-to-code-plugin-v1.14.zip');
   archive.pipe(res);
   for (const file of ['manifest.json', 'code.js', 'ui.html', 'README.md']) {
-    archive.file(fileURLToPath(new URL(`../../../figma-plugin/${file}`, import.meta.url)), { name: `frame-to-code/${file}` });
+    archive.file(fileURLToPath(new URL(`../../figma-plugin/${file}`, import.meta.url)), { name: `frame-to-code/${file}` });
   }
   archive.finalize().catch(next);
 });

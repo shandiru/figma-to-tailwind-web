@@ -16,7 +16,7 @@ export async function prepareInput(file, label) {
       let design = JSON.parse(file.buffer.toString('utf8'));
       if (design?.format === 'figma-to-tailwind-packed') {
         if (design.version !== 1 || design.encoding !== 'gzip-base64' || typeof design.data !== 'string' || !/^[A-Za-z0-9+/=]+$/.test(design.data)) throw new Error('Invalid packed export');
-        const unpacked = await decompress(Buffer.from(design.data, 'base64'), { maxOutputLength: 128 * 1024 * 1024 });
+        const unpacked = await decompress(Buffer.from(design.data, 'base64'), { maxOutputLength: 256 * 1024 * 1024 });
         design = JSON.parse(unpacked.toString('utf8'));
       }
       if (design?.format !== 'figma-to-tailwind' || design.version !== 1 || !design.frame) throw new Error('Invalid format');
