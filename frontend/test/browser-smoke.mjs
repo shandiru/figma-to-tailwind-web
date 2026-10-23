@@ -9,13 +9,20 @@ import express from '../../backend/node_modules/express/index.js';
 import app from '../../backend/src/app.js';
 import { Conversion } from '../../backend/src/models/Conversion.js';
 import { env } from '../../backend/src/config/env.js';
-import { nativeClipboardHtml, sampleMessage } from '../../backend/test/helpers/nativeClipboard.js';
 import { gzipSync } from 'node:zlib';
-import sharp from '../../backend/node_modules/sharp/lib/index.js';
+import { createRequire } from 'node:module';
 import postcss from '../node_modules/postcss/lib/postcss.mjs';
 import tailwind from '../node_modules/tailwindcss/lib/index.js';
+import { mock } from 'node:test';
+import { authStore } from '../../backend/test/helpers/authStore.js';
+import { emailService } from '../../backend/src/services/emailService.js';
+const sharp = createRequire(new URL('../../backend/package.json', import.meta.url))('sharp');
 
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'frame-code-browser-'));
+authStore(mock);
+const otpMessages = [];
+mock.method(emailService, 'sendVerification', async (_email, code) => otpMessages.push(code));
+env.authSecret = 'isolated-browser-test-secret-never-for-production';
 env.storageDir = path.join(profile, 'exports');
 Conversion.create = async () => ({ id: 'browser-smoke', save: async () => {} });
 const host = express();
@@ -25,6 +32,7 @@ host.use((req, res, next) => req.path.startsWith('/api/') ? app(req, res, next) 
 host.use(express.static(path.resolve('frontend/dist')));
 const server = host.listen(0, '127.0.0.1');
 await new Promise(resolve => server.once('listening', resolve));
+env.clientOrigins = [`http://127.0.0.1:${server.address().port}`];
 const browser = spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', ['--headless=new', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { windowsHide: true, stdio: 'ignore' });
 browser.on('error', error => { console.error(error.message); });
 let ws;
@@ -62,90 +70,36 @@ try {
   await call('Runtime.enable');
   await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false });
   await call('Page.navigate', { url: `http://127.0.0.1:${server.address().port}` });
-  await waitFor(`!!document.querySelector('[aria-label="Import source"]')`);
-  await evaluate(`Array.from(document.querySelectorAll('[aria-label="Import source"] button')).find(button => button.textContent === 'Paste design').click()`);
-  await waitFor(`!!document.querySelector('[aria-label="Paste copied Figma design"]')`);
-  await evaluate(`(() => { const transfer = new DataTransfer(); transfer.setData('text/html', ${JSON.stringify(nativeClipboardHtml().replaceAll('<', '&lt;').replaceAll('>', '&gt;'))}); document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true })); })()`);
-  await waitFor(`!!document.querySelector('[aria-label="Design layers"]')`);
-  const buttonScene = sampleMessage(); buttonScene.nodeChanges[0].name = 'Original clipboard button';
-  await evaluate(`(() => { window.readOptions = []; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { read: async options => { window.readOptions.push(options); return [{ types: ['image/png'] }, { types: ['text/html'], getType: async () => new Blob([${JSON.stringify(nativeClipboardHtml(buttonScene))}], {type:'text/html'}) }]; } } }); document.querySelector('[aria-label="Paste copied Figma design"]').click(); })()`);
-  await waitFor(`Array.from(document.querySelectorAll('[data-canvas="desktop"] [aria-label="Design layers"] button')).some(button => button.title.startsWith('Original clipboard button'))`);
-  assert.deepEqual(await evaluate('window.readOptions[0]'), { unsanitized: ['text/html'] });
-  const recovered = sampleMessage(); recovered.nodeChanges[0].name = 'Recovered keyboard';
-  recovered.nodeChanges.push(
-    { guid: { sessionID: 8, localID: 1 }, type: 'SYMBOL', name: 'Button master', size: { x: 180, y: 40 } },
-    { guid: { sessionID: 8, localID: 2 }, parentIndex: { guid: { sessionID: 8, localID: 1 }, position: 'A' }, type: 'TEXT', name: 'Component label', size: { x: 160, y: 30 }, textData: { characters: 'Default button' } },
-    { guid: { sessionID: 8, localID: 3 }, parentIndex: { guid: { sessionID: 1, localID: 2 }, position: 'Z' }, type: 'INSTANCE', name: 'Recovered button instance', size: { x: 180, y: 40 }, symbolData: { symbolID: { sessionID: 8, localID: 1 }, symbolOverrides: [{ guidPath: { guids: [{ sessionID: 8, localID: 2 }] }, textData: { characters: 'Native recovered button' } }] } },
-    { guid: { sessionID: 8, localID: 4 }, parentIndex: { guid: { sessionID: 1, localID: 2 }, position: 'ZZ' }, type: 'RECTANGLE', name: 'Missing photo', size: { x: 80, y: 80 }, fillPaints: [{ type: 'IMAGE', image: {} }] }
-  );
-  await evaluate(`(() => { navigator.clipboard.read = async options => { window.readOptions.push(options); return [{types:['text/html'], getType:async()=>new Blob([${JSON.stringify(nativeClipboardHtml(recovered))}])}]; }; const transfer = new DataTransfer(); transfer.setData('text/html','<span>sanitized selection</span>'); document.body.dispatchEvent(new ClipboardEvent('paste',{clipboardData:transfer,bubbles:true,cancelable:true})); })()`);
-  await waitFor(`Array.from(document.querySelectorAll('[data-canvas="desktop"] [aria-label="Design layers"] button')).some(button => button.title.startsWith('Recovered keyboard'))`);
-  assert.equal(await evaluate('window.readOptions.length'), 2, 'keyboard paste recovers original clipboard HTML when event data was sanitized');
-  assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).some(button => button.textContent === 'Download paste sample')`), true, 'incomplete native copies can be downloaded for diagnosis');
-  await evaluate(`Array.from(document.querySelectorAll('[aria-label="Design layers"] button')).find(button => button.title.startsWith('Hero section')).click()`);
-  await delay(800);
+  await waitFor(`!!document.getElementById('auth-email')`);
   await fs.mkdir('artifacts', { recursive: true });
-  const screenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-  await fs.writeFile('artifacts/native-paste-desktop.png', Buffer.from(screenshot.data, 'base64'));
-  await evaluate(`Array.from(document.querySelectorAll('button')).find(button => button.textContent.includes('Build selected section')).click()`);
-  await waitFor(`!!document.querySelector('iframe[title="Generated page preview"]')`);
-  await evaluate(`document.getElementById('tab-Code').click()`);
-  await waitFor('!!document.querySelector("pre code")');
-  const code = await evaluate('document.querySelector("pre code").textContent');
-  assert.match(code, /Hero section/);
-  assert.match(code, /Native recovered button/);
-  assert.doesNotMatch(code, /Default button/);
-  assert.doesNotMatch(code, /data-layer="(?:Footer|Landing page)"/);
-  // Paste a separate mobile design, retaining the selected desktop section.
-  await evaluate(`document.querySelector('[aria-label="Paste mobile version"]').click()`);
-  const mobileScene = sampleMessage();
-  mobileScene.nodeChanges[0].name = 'Mobile landing';
-  mobileScene.nodeChanges[0].size.x = 390;
-  mobileScene.nodeChanges[1].name = 'Mobile Hero section';
-  mobileScene.nodeChanges[1].size = { x: 390, y: 500 };
-  mobileScene.nodeChanges[2].size.x = 300;
-  mobileScene.nodeChanges[3].size.x = 390;
-  await evaluate(`(() => { const transfer = new DataTransfer(); transfer.setData('text/html', ${JSON.stringify(nativeClipboardHtml(mobileScene))}); document.body.dispatchEvent(new ClipboardEvent('paste', {clipboardData:transfer,bubbles:true,cancelable:true})); })()`);
-  await waitFor(`!!document.querySelector('[data-canvas="mobile"] [aria-label="Design layers"]')`);
-  assert.equal(await evaluate(`document.querySelector('[aria-label="Paste desktop version"]').parentElement.textContent.includes('Version ready')`), true, 'mobile paste retains the desktop slot');
-  assert.equal(await evaluate(`Array.from(document.querySelectorAll('[data-canvas="desktop"] [aria-label="Design layers"] button')).find(button => button.title.startsWith('Hero section')).getAttribute('aria-pressed')`), 'true', 'mobile paste retains desktop section selection');
-  await evaluate(`Array.from(document.querySelectorAll('[data-canvas="mobile"] [aria-label="Design layers"] button')).find(button => button.title.startsWith('Mobile Hero section')).click()`);
-  // Replacing desktop must also leave the mobile frame and section untouched.
-  await evaluate(`document.querySelector('[aria-label="Paste desktop version"]').click()`);
-  const replacement = sampleMessage();
-  replacement.nodeChanges[0].name = 'Replacement desktop';
-  replacement.nodeChanges[1].name = 'Desktop replacement hero';
-  await evaluate(`(() => { const transfer = new DataTransfer(); transfer.setData('text/html', ${JSON.stringify(nativeClipboardHtml(replacement))}); document.body.dispatchEvent(new ClipboardEvent('paste', {clipboardData:transfer,bubbles:true,cancelable:true})); })()`);
-  await waitFor(`Array.from(document.querySelectorAll('[data-canvas="desktop"] [aria-label="Design layers"] button')).some(button => button.title.startsWith('Desktop replacement hero'))`);
-  assert.equal(await evaluate(`Array.from(document.querySelectorAll('[data-canvas="mobile"] [aria-label="Design layers"] button')).find(button => button.title.startsWith('Mobile Hero section')).getAttribute('aria-pressed')`), 'true', 'replacing desktop retains the mobile section');
-  await evaluate(`Array.from(document.querySelectorAll('[data-canvas="desktop"] [aria-label="Design layers"] button')).find(button => button.title.startsWith('Desktop replacement hero')).click()`);
-  await evaluate(`document.querySelector('[aria-label="Paste mobile version"]').click()`);
-  await waitFor(`Array.from(document.querySelectorAll('[data-canvas="mobile"] button')).some(button => button.textContent.includes('Build responsive HTML'))`);
-  await evaluate(`Array.from(document.querySelectorAll('[data-canvas="mobile"] button')).find(button => button.textContent.includes('Build responsive HTML')).click()`);
-  await waitFor(`!!document.querySelector('iframe[title="Generated page preview"]')`);
-  await evaluate(`document.getElementById('tab-Code').click()`);
-  await waitFor('!!document.querySelector("pre code")');
-  const responsiveCode = await evaluate('document.querySelector("pre code").textContent');
-  assert.match(responsiveCode, /aria-label="desktop layout"/);
-  assert.match(responsiveCode, /aria-label="mobile layout"/);
-  assert.match(responsiveCode, /data-frame-width="1200" data-frame-height="400"/);
-  assert.match(responsiveCode, /data-frame-width="390" data-frame-height="500"/);
-  assert.match(responsiveCode, /Mobile Hero section/);
-  assert.match(responsiveCode, /Desktop replacement hero/);
-  assert.doesNotMatch(responsiveCode, /Footer/);
+  let authScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  await fs.writeFile('artifacts/login-desktop.png', Buffer.from(authScreenshot.data, 'base64'));
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  await evaluate(`document.getElementById('tab-Design').click()`);
-  await waitFor(`!!document.querySelector('[aria-label="Design layers"]')`);
-  await evaluate(`document.querySelector('[aria-label="Output workspace"]').scrollIntoView()`);
-  await delay(200);
-  assert.equal(await evaluate(`Array.from(document.querySelectorAll('[data-canvas="mobile"] [aria-label="Design layers"] button')).find(button => button.title.startsWith('Mobile Hero section')).getAttribute('aria-pressed')`), 'true', 'mobile selection survives output tab changes');
-  assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'), false, 'mobile page has no horizontal overflow');
-  const mobile = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-  await fs.writeFile('artifacts/native-paste-mobile.png', Buffer.from(mobile.data, 'base64'));
-  await evaluate(`document.querySelector('[aria-label="Remove mobile version"]').click()`);
-  assert.equal(await evaluate(`document.querySelector('[aria-label="Paste desktop version"]').parentElement.textContent.includes('Version ready')`), true, 'removing mobile retains desktop');
-  assert.equal(await evaluate(`document.querySelector('[aria-label="Paste mobile version"]').parentElement.textContent.includes('Version ready')`), false, 'only mobile is removed');
-  // Complete plugin copies include real artwork bytes, unlike missing native image hashes.
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, 'mobile auth has no horizontal overflow');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('button[type="submit"]')).borderRadius`), '0px');
+  authScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  await fs.writeFile('artifacts/login-mobile.png', Buffer.from(authScreenshot.data, 'base64'));
+  await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false });
+  const fill = async (id, value) => evaluate(`(() => { const input = document.getElementById(${JSON.stringify(id)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', {bubbles:true})); })()`);
+  await evaluate(`Array.from(document.querySelectorAll('button')).find(button => button.textContent.includes('Create an account')).click()`);
+  await fill('auth-name', 'Browser Designer');
+  await fill('auth-email', 'browser@example.com');
+  await fill('auth-password', 'a long browser test passphrase');
+  await evaluate('document.querySelector("form").requestSubmit()');
+  await waitFor(`!!document.getElementById('auth-code')`);
+  assert.equal(otpMessages.length, 1);
+  await fill('auth-code', otpMessages[0]);
+  await evaluate('document.querySelector("form").requestSubmit()');
+  await waitFor(`!!document.querySelector('[aria-label="JSON uploads"]')`);
+  await call('Page.reload');
+  await waitFor(`!!document.querySelector('[aria-label="JSON uploads"]')`);
+  await evaluate(`Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Sign out').click()`);
+  await waitFor(`!!document.getElementById('auth-email')`);
+  await fill('auth-email', 'browser@example.com');
+  await fill('auth-password', 'a long browser test passphrase');
+  await evaluate('document.querySelector("form").requestSubmit()');
+  await waitFor(`!!document.querySelector('[aria-label="JSON uploads"]')`);
+  assert.equal(await evaluate('document.body.textContent.includes("Paste design")'), false, 'Only JSON uploads are offered');
   const photo = await sharp({ create: { width: 64, height: 48, channels: 3, background: { r: 20, g: 180, b: 50 } } }).png().toBuffer();
   const complete = { format: 'figma-to-tailwind', version: 1, assets: { photo: photo.toString('base64') }, frame: { name: 'Complete design artwork', type: 'FRAME', width: 1200, height: 600, css: { background: '#fff' }, children: [{ name: 'Photo', type: 'RECTANGLE', x: 40, y: 40, width: 320, height: 240, asset: { assetId: 'photo' } }] } };
   complete.reference = { format: 'png', image: photo.toString('base64'), width: 1200, height: 600 };
@@ -155,26 +109,24 @@ try {
     { name: 'Button', type: 'FRAME', width: 180, height: 40, x: 40, y: 70, children: [{ name: 'Button label', type: 'TEXT', width: 160, height: 24, x: 10, y: 8, text: 'Join now' }] },
     { name: 'CTA caravan photo', type: 'RECTANGLE', width: 300, height: 120, x: 800, y: 20, asset: { assetId: 'photo' } }
   ] });
-  await evaluate(`document.querySelector('[aria-label="Paste desktop version"]').click()`);
-  await evaluate(`(() => { const transfer = new DataTransfer(); transfer.setData('text/plain', ${JSON.stringify(JSON.stringify(complete))}); document.body.dispatchEvent(new ClipboardEvent('paste', {clipboardData:transfer,bubbles:true,cancelable:true})); })()`);
-  await waitFor(`Array.from(document.querySelectorAll('[data-canvas="desktop"] [aria-label="Design layers"] button')).some(button => button.title.startsWith('Complete design artwork'))`);
+  const upload = async (index, payload, name = 'frame.json') => {
+    await evaluate(`(() => { const transfer = new DataTransfer(); transfer.items.add(new File([${JSON.stringify(payload)}], ${JSON.stringify(name)}, {type:'application/json'})); const input = document.querySelectorAll('input[type="file"]')[${index}]; input.files = transfer.files; input.dispatchEvent(new Event('change', {bubbles:true})); })()`);
+  };
+  await upload(0, JSON.stringify(complete), 'desktop.json');
+  await waitFor(`!!document.querySelector('[data-canvas="desktop"] [aria-label="Compare with Figma"]')`);
   await evaluate(`Array.from(document.querySelectorAll('[data-canvas="desktop"] [aria-label="Compare with Figma"] button')).find(button => button.textContent === 'Figma original').click()`);
   await waitFor(`!!document.querySelector('img[alt="Figma original reference"]')`);
   await evaluate(`Array.from(document.querySelectorAll('[data-canvas="desktop"] [aria-label="Compare with Figma"] button')).find(button => button.textContent === 'Generated HTML').click()`);
-  await waitFor(`!!document.querySelector('[data-canvas="desktop"] iframe[title="Pasted Figma design"]')`);
+  await waitFor(`!!document.querySelector('[data-canvas="desktop"] iframe[title="Uploaded Figma design"]')`);
   await evaluate(`Array.from(document.querySelectorAll('[data-canvas="desktop"] button')).find(button => button.textContent.includes('Build selected section')).click()`);
   await waitFor(`!!document.querySelector('iframe[title="Generated page preview"]')`);
   const completePreview = await evaluate(`document.querySelector('iframe[title="Generated page preview"]').srcdoc`);
   assert.match(completePreview, /data-layer="Photo"/);
   const photoBytes = completePreview.match(/data:image\/webp;base64,([^"\s]+)/)?.[1];
-  assert.ok(photoBytes, 'plugin photo bytes survive paste, conversion and preview embedding');
+  assert.ok(photoBytes, 'plugin photo bytes survive JSON upload, conversion and preview embedding');
   const rgb = await sharp(Buffer.from(photoBytes, 'base64')).removeAlpha().raw().toBuffer();
   assert.ok(rgb[0] < 50 && rgb[1] > 150 && rgb[2] < 90, 'converted photo retains its source colors');
-  // Upload JSON uses the same artwork preview and independent section selections.
-  await evaluate(`document.getElementById('tab-Design').click(); Array.from(document.querySelectorAll('[aria-label="Import source"] button')).find(button => button.textContent === 'Upload JSON').click()`);
-  const upload = async (index, payload, name = 'frame.json') => {
-    await evaluate(`(() => { const transfer = new DataTransfer(); transfer.items.add(new File([${JSON.stringify(payload)}], ${JSON.stringify(name)}, {type:'application/json'})); const input = document.querySelectorAll('input[type="file"]')[${index}]; input.files = transfer.files; input.dispatchEvent(new Event('change', {bubbles:true})); })()`);
-  };
+  await evaluate(`document.getElementById('tab-Design').click()`);
   await upload(0, JSON.stringify(complete), 'desktop.json');
   await waitFor(`!!document.querySelector('[data-canvas="desktop"] [aria-label="Compare with Figma"]') && !document.querySelector('[role="tabpanel"] [role="status"]')?.textContent.includes('Reading')`);
   await waitFor(`Array.from(document.querySelectorAll('[data-canvas="desktop"] [aria-label="Design layers"] button')).some(button => button.title.startsWith('Small parent') && !button.disabled)`);
@@ -210,9 +162,10 @@ try {
   assert.equal(ctaGeometry.tag, 'DIV', 'CTA section containing buttons must stay a container');
   assert.ok(Math.abs(ctaGeometry.top - 20 * ctaGeometry.scale) < 1, 'lower section photo must not jump to the top of the page');
   assert.deepEqual(errors, [], 'no browser runtime exceptions');
-  console.log('Browser smoke passed: desktop/mobile merge, independent sections, complete plugin artwork and source color preservation.');
+  console.log('Browser smoke passed: registration, email OTP, cookie restore, logout/login, desktop/mobile merge, independent sections, artwork and source colors.');
 } finally {
   ws?.close(); browser.kill();
+  mock.restoreAll();
   server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
   await delay(500);
   // Only remove the exact mkdtemp directory created above, within the OS temp root.

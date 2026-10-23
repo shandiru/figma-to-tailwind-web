@@ -22,7 +22,7 @@ export function extractSection(design, path) {
     const background = node.css?.background || node.css?.['background-color'];
     if (background && !/gradient|url\(/i.test(background)) backdrop = background;
     node = node.children?.[index];
-    if (!node) throw new Error('This section is no longer available. Paste your design again.');
+    if (!node) throw new Error('This section is no longer available. Upload your JSON file again.');
   }
   const frame = { ...node, x: 0, y: 0, css: { ...inherited, ...node.css } };
   if (backdrop && !frame.backgroundImage && !frame.css.background && !frame.css['background-color']) frame.css.background = backdrop;

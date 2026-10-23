@@ -84,18 +84,19 @@ test('decodes vector geometry and rejects malformed command streams', () => {
   assert.throws(() => pathFromBlob(Buffer.from([4, 1])), /Unsupported/);
 });
 
-test('native clipboard endpoint prepares a selectable canvas without a Figma token or database', async t => {
+test('authenticated JSON preview prepares a selectable canvas and rejects clipboard payloads', async t => {
+  const { authorize } = await import('./helpers/auth.js');
+  const fetch = authorize(t);
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
-  const base = `http://127.0.0.1:${server.address().port}/api/clipboard`;
-  const response = await fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html: nativeClipboardHtml() }) });
+  const base = `http://127.0.0.1:${server.address().port}/api/layers/preview`;
+  const response = await fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layers: JSON.stringify(demoDesign()) }) });
   assert.equal(response.status, 200, await response.clone().text());
   assert.equal(response.headers.get('cache-control'), 'no-store');
   const result = await response.json();
-  assert.equal(result.design.frame.children[0].name, 'Hero section');
-  assert.match(result.preview, /Hello /);
-  assert.match(result.preview, /world/);
+  assert.equal(result.design.frame.name, demoDesign().frame.name);
+  assert.match(result.preview, /Good things/);
   const pluginDesign = demoDesign();
   delete pluginDesign.warnings;
   pluginDesign.frame.children.push({ name: 'Pattern stripes / Vector', type: 'VECTOR', x: 0, y: 0, width: 0.01, height: 20, asset: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="0" height="20" viewBox="0 0 0.01 20"><rect width="0.01" height="20" fill="red"/></svg>').toString('base64') });
@@ -108,6 +109,8 @@ test('native clipboard endpoint prepares a selectable canvas without a Figma tok
   assert.ok(pastedPlugin.warnings.some(warning => /raster dimensions were repaired/.test(warning)));
   const invalid = await fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html: '<span>not a frame</span>' }) });
   assert.equal(invalid.status, 400);
+  const removed = await fetch(`http://127.0.0.1:${server.address().port}/api/clipboard`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal(removed.status, 404);
 });
 
 

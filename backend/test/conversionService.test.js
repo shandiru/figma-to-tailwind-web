@@ -12,6 +12,7 @@ test('builds editable text and button elements without any network requests or f
   assert.match(output.html, /<button type="button" data-layer="CTA button"/);
   assert.match(output.html, /max-w-\[1080px\]/);
   assert.ok(!/\sstyle\s*=|<style\b|\.style\b/.test(output.html));
+  assert.ok(!/rounded|border(?:-[a-z]+)*-radius/.test(output.html), 'Generated HTML uses square corners');
   assert.equal((output.html.match(/<script\b/g) || []).length, 1, 'Only the Tailwind CDN loader is needed');
   assert.match(output.html, /&lt;script&gt;unsafe&lt;\/script&gt;/);
   assert.ok(!output.html.includes('<img'));

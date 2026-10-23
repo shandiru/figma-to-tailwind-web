@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { upload } from '../middleware/upload.js';
 import { convert, history, downloadById } from '../controllers/convertController.js';
 import { frames, importFrames } from '../controllers/figmaController.js';
-import { pasteClipboard } from '../controllers/clipboardController.js';
+import { previewLayers } from '../controllers/layerController.js';
 
 const router = Router();
 router.get('/plugin', (_req, res, next) => {
@@ -30,7 +30,7 @@ const convertLimiter = rateLimit({
 router.post('/convert', convertLimiter, upload, convert);
 router.post('/figma/frames', convertLimiter, frames);
 router.post('/figma/import', convertLimiter, importFrames);
-router.post('/clipboard', convertLimiter, pasteClipboard);
+router.post('/layers/preview', convertLimiter, previewLayers);
 router.get('/history', history);
 router.get('/history/:id/download', downloadById);
 

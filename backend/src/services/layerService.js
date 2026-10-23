@@ -5,9 +5,8 @@ import { encodeArtwork } from './artworkService.js';
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const VISUAL_PROPERTIES = new Set([
   'background', 'background-color', 'background-image', 'background-size', 'background-position',
-  'border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-radius',
+  'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
   'border-color', 'border-width', 'border-style', 'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
-  'border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius',
   'box-shadow', 'opacity', 'color', 'font', 'font-family', 'font-size', 'font-weight', 'font-style',
   'line-height', 'letter-spacing', 'text-align', 'text-decoration', 'text-transform',
   'white-space', 'word-break', 'mix-blend-mode', 'filter', 'backdrop-filter',
@@ -162,7 +161,7 @@ export async function convertLayers(desktop, mobile, opts) {
     if (node.backgroundImage) {
       const src = await imageAsset(node.backgroundImage, 'background', layerPath, { width, height });
       const fit = node.backgroundMode === 'EXACT' ? 'object-fill' : node.backgroundMode === 'FIT' ? 'object-contain' : 'object-cover';
-      background = `<img src="${src}" alt="" aria-hidden="true" class="pointer-events-none absolute inset-0 h-full w-full rounded-[inherit] ${fit}">`;
+      background = `<img src="${src}" alt="" aria-hidden="true" class="pointer-events-none absolute inset-0 h-full w-full ${fit}">`;
       if (node.backgroundMode && !['FIT', 'FILL', 'EXACT'].includes(node.backgroundMode)) warnings.add('Some image crops use a centered cover approximation. Re-export with plugin v1.5 or later to retain their Figma crop.');
     }
     const name = escape(node.name || node.type || 'Layer');

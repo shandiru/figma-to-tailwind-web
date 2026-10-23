@@ -3,6 +3,7 @@ import { ApiError, asyncHandler } from '../utils/ApiError.js';
 import { prepareInput } from '../services/inputService.js';
 import { convertDesign } from '../services/conversionService.js';
 import { createZip } from '../services/zipService.js';
+import mongoose from 'mongoose';
 
 const clampWidth = (v, fallback) => {
   const n = Number.parseInt(v, 10);
@@ -30,7 +31,7 @@ export const convert = asyncHandler(async (req, res) => {
     mobileWidth: clampWidth(options.mobileWidth, 390),
   };
 
-  const record = await Conversion.create({ name: opts.pageName });
+  const record = await Conversion.create({ name: opts.pageName, userId: req.user._id });
   try {
     const desktop = await prepareInput(desktopFile, 'desktop');
     const mobile = await prepareInput(mobileFile, 'mobile');
@@ -51,13 +52,14 @@ export const convert = asyncHandler(async (req, res) => {
   }
 });
 
-export const history = asyncHandler(async (_req, res) => {
-  const items = await Conversion.find().sort({ createdAt: -1 }).limit(50).select('name status createdAt error');
+export const history = asyncHandler(async (req, res) => {
+  const items = await Conversion.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(50).select('name status createdAt error');
   res.json(items);
 });
 
 export const downloadById = asyncHandler(async (req, res) => {
-  const item = await Conversion.findById(req.params.id);
+  if (!mongoose.isObjectIdOrHexString(req.params.id)) throw new ApiError(404, 'Conversion not found.');
+  const item = await Conversion.findOne({ _id: req.params.id, userId: req.user._id });
   if (!item || item.status !== 'done' || !item.zipPath) throw new ApiError(404, 'Conversion not found.');
   res.download(item.zipPath, fileName(item.name), (err) => {
     if (err && !res.headersSent) res.status(404).json({ error: 'ZIP file no longer exists.' });

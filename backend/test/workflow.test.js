@@ -9,8 +9,10 @@ import { env } from '../src/config/env.js';
 import { Conversion } from '../src/models/Conversion.js';
 import { demoDesign } from '../../frontend/src/data/demo.js';
 import { gzipSync } from 'node:zlib';
+import { authorize } from './helpers/auth.js';
 
 test('multipart layer upload produces an editable HTML ZIP and plugin download includes all files', async t => {
+  const fetch = authorize(t);
   const directory = await mkdtemp(path.join(os.tmpdir(), 'f2t-layers-test-'));
   const storageDir = env.storageDir;
   env.storageDir = directory;
