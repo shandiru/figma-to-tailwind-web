@@ -7,6 +7,7 @@ const VISUAL_PROPERTIES = new Set([
   'background', 'background-color', 'background-image', 'background-size', 'background-position',
   'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
   'border-color', 'border-width', 'border-style', 'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+  'border-radius', 'border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius',
   'box-shadow', 'opacity', 'color', 'font', 'font-family', 'font-size', 'font-weight', 'font-style',
   'line-height', 'letter-spacing', 'text-align', 'text-decoration', 'text-transform',
   'white-space', 'word-break', 'mix-blend-mode', 'filter', 'backdrop-filter',
@@ -60,6 +61,12 @@ function visualClasses(css, frameWidth) {
       if (key === 'color') return `text-[color:${encoded}]`;
       if (key === 'line-height') return `leading-[${encoded}]`;
       if (key === 'font-weight') return `font-[${encoded}]`;
+      if (key === 'border-radius') return `rounded-[${encoded}]`;
+      if (key.startsWith('border-') && key.endsWith('-radius')) {
+        const corner = key.slice('border-'.length, -'-radius'.length);
+        const cornerClass = { 'top-left': 'tl', 'top-right': 'tr', 'bottom-right': 'br', 'bottom-left': 'bl' }[corner];
+        return cornerClass ? `rounded-${cornerClass}-[${encoded}]` : `[${key}:${encoded}]`;
+      }
       if (key === 'text-align' && ['left', 'right', 'center', 'justify'].includes(value)) return `text-${value}`;
       if (key === 'font-style' && ['normal', 'italic'].includes(value)) return value === 'italic' ? 'italic' : 'not-italic';
       return `[${key}:${encoded}]`;
