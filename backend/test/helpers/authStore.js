@@ -1,8 +1,10 @@
 import { AuthChallenge, AuthSession, AuthThrottle } from '../../src/models/Auth.js';
 import { User } from '../../src/models/User.js';
+import { database } from '../../src/config/db.js';
 
 // Isolated Mongo adapter for HTTP tests; no production database or email account.
 export function authStore(mocks) {
+  mocks.method(database, 'connect', async () => {});
   const users = new Map(), challenges = new Map(), sessions = new Map(), limits = new Map();
   const match = (doc, query) => Object.entries(query).every(([key, value]) => {
     const current = doc[key];

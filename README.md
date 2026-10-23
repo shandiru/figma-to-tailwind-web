@@ -51,6 +51,8 @@ Plugin v1.3 deduplicates artwork and compresses large exports with gzip. It supp
 
 ### Accounts and deployment
 
+The exported Express app awaits a shared MongoDB connection before handling API requests, including when Vercel imports `src/app.js` without running `src/server.js`. Concurrent requests share the connection attempt and pool; failed attempts can retry. Query buffering is disabled. Account uniqueness and expiry indexes are created before auth queries run. `/api/health` returns `200 {"ok":true}` only after database readiness; unavailable connections return a sanitized `503` instead of an auth-throttle buffering timeout. In the backend Vercel project, configure `MONGO_URI` for Production/Preview as required, redeploy after changes, and ensure Atlas network access and database credentials permit that deployment to connect.
+
 The workspace now requires an account. Registration sends a six-digit email code, valid for 10 minutes with a maximum of five verification attempts. A code can only be used once. Resending invalidates the previous code and is limited to one email per minute and five per hour. Sign-in uses the verified email and password (15–128 characters). Passwords use salted scrypt; OTPs use keyed hashes; session tokens are stored as hashes. MongoDB stores session expiry and throttles so they survive serverless instance changes. Design history and ZIP downloads are scoped to the signed-in user. Legacy conversions without a user are not exposed to any account.
 
 Set these **backend** hosting environment variables:
