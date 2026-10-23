@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /super-admin/
+
+Sitemap: https://figma-to-code.imdiru.online/sitemap.xml
+Host: figma-to-code.imdiru.online

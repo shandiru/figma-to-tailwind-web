@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Frame to Code</title>
+  <desc id="description">From your Figma canvas to editable web code.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#171a2b"/><stop offset="1" stop-color="#25213d"/></linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#7c3aed"/></linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <circle cx="1070" cy="70" r="270" fill="#7c3aed" opacity=".13"/>
+  <circle cx="120" cy="640" r="290" fill="#8b5cf6" opacity=".08"/>
+  <g transform="translate(76 67)"><rect width="58" height="58" fill="#7c3aed"/><g transform="translate(14 12)" fill="none" stroke="#fff" stroke-width="2.6"><path d="M11 1H3v32h8M23 1h8v32h-8"/><path d="m12 10-6 6 6 6m10-12 6 6-6 6"/></g><text x="78" y="42" fill="#fff" font-family="Arial, sans-serif" font-size="38" font-weight="700">frame<tspan fill="#a78bfa">to</tspan>code<tspan fill="#8b5cf6">.</tspan></text></g>
+  <text x="76" y="270" fill="#fff" font-family="Arial, sans-serif" font-size="70" font-weight="700" letter-spacing="-2">From your canvas.</text>
+  <text x="76" y="352" fill="#c4b5fd" font-family="Arial, sans-serif" font-size="70" font-weight="700" letter-spacing="-2">To the open web.</text>
+  <text x="80" y="420" fill="#cbd5e1" font-family="Arial, sans-serif" font-size="25">Figma frames → responsive Tailwind code</text>
+  <g transform="translate(76 493)" font-family="Arial, sans-serif" font-size="18"><rect width="150" height="48" rx="24" fill="#fff" opacity=".08"/><text x="28" y="31" fill="#e2e8f0">HTML + Tailwind</text><rect x="166" width="105" height="48" rx="24" fill="#fff" opacity=".08"/><text x="193" y="31" fill="#e2e8f0">React</text><rect x="287" width="94" height="48" rx="24" fill="#fff" opacity=".08"/><text x="316" y="31" fill="#e2e8f0">Vue</text></g>
+  <g transform="translate(805 178)"><rect width="295" height="305" rx="10" fill="#fff" opacity=".96"/><rect x="28" y="31" width="83" height="12" fill="url(#accent)"/><rect x="28" y="75" width="207" height="20" fill="#334155"/><rect x="28" y="108" width="159" height="20" fill="#334155"/><rect x="28" y="151" width="236" height="9" fill="#e2e8f0"/><rect x="28" y="173" width="196" height="9" fill="#e2e8f0"/><rect x="28" y="213" width="105" height="45" fill="#7c3aed"/><path d="M-33 147h45m-13-13 13 13-13 13" fill="none" stroke="#a78bfa" stroke-width="5"/></g>
+</svg>
