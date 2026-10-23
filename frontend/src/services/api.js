@@ -1,8 +1,9 @@
 import { API_BASE, apiFetch } from './http.js';
 
-export async function convertDesigns({ desktop, mobile, options }) {
+export async function convertDesigns({ desktop, tablet, mobile, options }) {
   const body = new FormData();
   if (desktop) body.append('desktop', desktop);
+  if (tablet) body.append('tablet', tablet);
   if (mobile) body.append('mobile', mobile);
   body.append('options', JSON.stringify(options));
   const res = await apiFetch('/convert', { method: 'POST', body });

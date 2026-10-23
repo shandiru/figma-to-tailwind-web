@@ -92,7 +92,7 @@ function borderOffsets(css) {
 }
 
 /** Render structured Figma layers as editable elements, never a screenshot of the frame. */
-export async function convertLayers(desktop, mobile, opts) {
+export async function convertLayers(desktop, mobile, opts, tablet) {
   const files = [];
   const buttonDescendants = new WeakMap();
   function containsButton(node, depth = 0) {
@@ -221,7 +221,7 @@ export async function convertLayers(desktop, mobile, opts) {
   }
 
   const sections = [];
-  for (const [label, input] of [['desktop', desktop], ['mobile', mobile]]) {
+  for (const [label, input] of [['mobile', mobile], ['tablet', tablet], ['desktop', desktop]]) {
     if (!input) continue;
     if (input.kind !== 'layers' || input.design?.format !== 'figma-to-tailwind' || input.design.version !== 1 || !input.design.frame) {
       throw new ApiError(400, 'Editable HTML needs Figma layers. Use the included Figma plugin to Copy layers, then paste or upload its JSON. A PNG/SVG screenshot cannot provide editable text and layout.');
@@ -237,13 +237,26 @@ export async function convertLayers(desktop, mobile, opts) {
     const height = number(design.frame.height);
     if (width <= 0 || height <= 0) throw new ApiError(400, 'The exported frame must have a positive width and height.');
     frames[label] = { width, height };
-    const visibility = desktop && mobile
-      ? (label === 'desktop' ? 'hidden sm:hidden md:block lg:block xl:block 2xl:block' : 'block sm:block md:hidden lg:hidden xl:hidden 2xl:hidden')
-      : 'block sm:block md:block lg:block xl:block 2xl:block';
-    // Keep the mobile frame fluid up to the desktop switch, preserving its
-    // exact geometry at its original width. Larger screens use desktop data.
-    const maxWidth = label === 'mobile' && desktop ? Math.max(width, 768) : width;
-    sections.push(`<!-- ${label === 'mobile' ? 'Mobile layout: base and sm; desktop takes over at md (768px).' : 'Desktop layout: md, lg, xl and 2xl.'} -->\n<section aria-label="${label} layout" class="${visibility} mx-auto w-full max-w-[${maxWidth}px] overflow-hidden [container-type:inline-size]" data-frame-width="${width}" data-frame-height="${height}">\n${await render(design.frame, width, true)}\n</section>`);
+    const inputs = { mobile, tablet, desktop };
+    const count = Object.values(inputs).filter(Boolean).length;
+    let visibility = 'block sm:block md:block lg:block xl:block 2xl:block';
+    if (count > 1) {
+      if (label === 'mobile') visibility = 'block sm:block md:hidden lg:hidden xl:hidden 2xl:hidden';
+      if (label === 'tablet') visibility = desktop
+        ? (mobile ? 'hidden sm:hidden md:block lg:hidden xl:hidden 2xl:hidden' : 'block sm:block md:block lg:hidden xl:hidden 2xl:hidden')
+        : (mobile ? 'hidden sm:hidden md:block lg:block xl:block 2xl:block' : 'block sm:block md:block lg:block xl:block 2xl:block');
+      if (label === 'desktop') visibility = tablet
+        ? 'hidden sm:hidden md:hidden lg:block xl:block 2xl:block'
+        : 'hidden sm:hidden md:block lg:block xl:block 2xl:block';
+    }
+    // Each supplied device layout owns its natural viewport range. Missing
+    // sizes fall back to the nearest supplied layout.
+    const maxWidth = label === 'mobile' && (tablet || desktop) ? Math.max(width, 768)
+      : label === 'tablet' && desktop ? Math.max(width, 1024) : width;
+    const range = label === 'mobile' && (tablet || desktop) ? 'Mobile: base/sm;'
+      : label === 'tablet' ? `${mobile ? 'Tablet: md' : 'Tablet: base through md'}${desktop ? '; desktop from lg' : ' and wider'};`
+        : label === 'desktop' && tablet ? 'Desktop: lg and wider;' : label === 'desktop' && mobile ? 'Desktop: md and wider;' : `${label}: all widths;`;
+    sections.push(`<!-- ${range} -->\n<section aria-label="${label} layout" class="${visibility} mx-auto w-full max-w-[${maxWidth}px] overflow-hidden [container-type:inline-size]" data-frame-width="${width}" data-frame-height="${height}">\n${await render(design.frame, width, true)}\n</section>`);
   }
   for (const font of fonts) if (!fontStyles.has(font)) fontStyles.set(font, new Set(['0,400']));
   // Request actual used weights only, and isolate families so an unavailable
@@ -266,7 +279,7 @@ export async function convertLayers(desktop, mobile, opts) {
   <main>${sections.join('\n')}</main>
 </body>
 </html>`;
-  const errors = validateHtml(html, { responsive: Boolean(desktop && mobile) });
+  const errors = validateHtml(html, { responsive: Object.values({ desktop, tablet, mobile }).filter(Boolean).length > 1 });
   if (errors.length) throw new ApiError(422, `Generated HTML validation failed: ${errors.join(' ')}`);
   return { html, files, stats: { layers: count, textLayers: textCount, assets, frames }, warnings: [...warnings] };
 }

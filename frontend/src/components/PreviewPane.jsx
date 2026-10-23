@@ -9,13 +9,13 @@ export default function PreviewPane({ html, frames }) {
     observer.observe(container.current);
     return () => observer.disconnect();
   }, []);
-  const widths = { mobile: frames?.mobile?.width || 390, sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536, desktop: frames?.desktop?.width || 1440 };
+  const widths = { mobile: frames?.mobile?.width || 390, tablet: frames?.tablet?.width || 820, sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536, desktop: frames?.desktop?.width || 1440 };
   const viewportWidth = widths[mode];
   const scale = Math.max(0.1, Math.min(1, (availableWidth - 24) / viewportWidth));
   return (
     <div className="space-y-3">
       <div className="inline-flex max-w-full flex-wrap gap-0.5 border border-zinc-300 bg-white p-0.5 text-xs" role="group" aria-label="Preview size">
-        {['mobile', 'sm', 'md', 'lg', 'xl', '2xl', 'desktop'].map((m) => (
+        {['mobile', 'tablet', 'sm', 'md', 'lg', 'xl', '2xl', 'desktop'].map((m) => (
           <button
             key={m}
             type="button"

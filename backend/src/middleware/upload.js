@@ -6,10 +6,11 @@ const ALLOWED = /^(application\/json|image\/(png|jpe?g|webp|svg\+xml)|text\/(htm
 
 export const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: env.maxFileMb * 1024 * 1024, files: 2 },
+  limits: { fileSize: env.maxFileMb * 1024 * 1024, files: 3 },
   fileFilter: (_req, file, cb) =>
     ALLOWED.test(file.mimetype) ? cb(null, true) : cb(new ApiError(415, `Unsupported file type: ${file.mimetype}`)),
 }).fields([
   { name: 'desktop', maxCount: 1 },
+  { name: 'tablet', maxCount: 1 },
   { name: 'mobile', maxCount: 1 },
 ]);

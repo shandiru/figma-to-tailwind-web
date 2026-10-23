@@ -77,10 +77,10 @@ async function artwork(url, request) {
   return Buffer.concat(parts).toString('base64');
 }
 
-export async function importFigmaFrames({ url, token, desktopId, mobileId }, request = fetch) {
+export async function importFigmaFrames({ url, token, desktopId, tabletId, mobileId }, request = fetch) {
   const { key } = parseFigmaUrl(url);
-  const ids = [...new Set([desktopId, mobileId].filter(Boolean))];
-  if (!ids.length || ids.some(id => typeof id !== 'string' || !/^\d+:\d+$/.test(id))) throw new ApiError(400, 'Select a desktop or mobile frame.');
+  const ids = [...new Set([desktopId, tabletId, mobileId].filter(Boolean))];
+  if (!ids.length || ids.some(id => typeof id !== 'string' || !/^\d+:\d+$/.test(id))) throw new ApiError(400, 'Select a desktop, tablet, or mobile frame.');
   const api = createFigmaClient(token, request);
   const response = await api(`files/${key}/nodes?ids=${encodeURIComponent(ids.join(','))}&geometry=paths`);
   const leaves = [];
@@ -180,6 +180,6 @@ export async function importFigmaFrames({ url, token, desktopId, mobileId }, req
     return layer;
   };
   const result = {};
-  for (const [label, id] of [['desktop', desktopId], ['mobile', mobileId]]) if (id) result[label] = { format: 'figma-to-tailwind', version: 1, frame: await map(response.nodes[id].document, null, true), warnings: [...warnings] };
+  for (const [label, id] of [['desktop', desktopId], ['tablet', tabletId], ['mobile', mobileId]]) if (id) result[label] = { format: 'figma-to-tailwind', version: 1, frame: await map(response.nodes[id].document, null, true), warnings: [...warnings] };
   return result;
 }

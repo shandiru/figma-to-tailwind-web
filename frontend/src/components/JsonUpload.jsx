@@ -29,7 +29,7 @@ export default function JsonUpload({ title, file, onChange, disabled }) {
     onChange(files[0]);
   };
   return <section className="min-w-0">
-    <div className="mb-2.5 flex items-center justify-between text-xs"><h3 className="flex items-center gap-2 font-semibold text-slate-700"><StudioIcon name={title.startsWith('Mobile') ? 'phone' : 'monitor'} size={14}/>{title}</h3><span className={`text-[9px] font-medium ${file ? 'text-emerald-600' : 'text-slate-400'}`}>{file ? '✓ Added' : '.JSON'}</span></div>
+    <div className="mb-2.5 flex items-center justify-between text-xs"><h3 className="flex items-center gap-2 font-semibold text-slate-700"><StudioIcon name={title.startsWith('Mobile') ? 'phone' : title.startsWith('Tablet') ? 'tablet' : 'monitor'} size={14}/>{title}</h3><span className={`text-[9px] font-medium ${file ? 'text-emerald-600' : 'text-slate-400'}`}>{file ? '✓ Added' : '.JSON'}</span></div>
     <div tabIndex={disabled ? -1 : 0} role="button" aria-disabled={disabled} aria-label={`Upload ${title} JSON`}
       onClick={() => !disabled && input.current.click()}
       onKeyDown={event => { if (['Enter', ' '].includes(event.key)) { event.preventDefault(); if (!disabled) input.current.click(); } }}

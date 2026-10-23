@@ -27,7 +27,7 @@ export async function buildAssets(assets, inputs, html) {
         const density = Math.min(144 * Math.max(1, 64 / width), 1200); // 2x (144dpi), bumped for tiny icons
         buffer = await sharp(svg, { density }).webp(WEBP).toBuffer();
       } else if (asset.type === 'crop') {
-        const src = inputs[asset.source] || inputs.desktop || inputs.mobile;
+        const src = inputs[asset.source] || inputs.desktop || inputs.tablet || inputs.mobile;
         if (!src?.original) throw new Error('no source image');
         const meta = await sharp(src.original).metadata();
         const s = src.scale || 1;

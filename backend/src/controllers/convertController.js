@@ -13,8 +13,9 @@ const fileName = (name) => `${name.replace(/[^\w-]+/g, '-').toLowerCase() || 'pa
 
 export const convert = asyncHandler(async (req, res) => {
   const desktopFile = req.files?.desktop?.[0];
+  const tabletFile = req.files?.tablet?.[0];
   const mobileFile = req.files?.mobile?.[0];
-  if (!desktopFile && !mobileFile) throw new ApiError(400, 'Provide at least one design (desktop or mobile).');
+  if (!desktopFile && !tabletFile && !mobileFile) throw new ApiError(400, 'Provide at least one design (desktop, tablet, or mobile).');
 
   let options = {};
   try {
@@ -34,8 +35,9 @@ export const convert = asyncHandler(async (req, res) => {
   const record = await Conversion.create({ name: opts.pageName, userId: req.user._id });
   try {
     const desktop = await prepareInput(desktopFile, 'desktop');
+    const tablet = await prepareInput(tabletFile, 'tablet');
     const mobile = await prepareInput(mobileFile, 'mobile');
-    const { html, files, stats, warnings } = await convertDesign(desktop, mobile, opts);
+    const { html, files, stats, warnings } = await convertDesign(desktop, mobile, opts, tablet);
     const zipPath = await createZip(record.id, opts.pageName, html, files, { stats, warnings });
 
     record.status = 'done';
