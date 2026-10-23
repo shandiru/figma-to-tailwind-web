@@ -30,6 +30,7 @@ export const convert = asyncHandler(async (req, res) => {
     pageName: String(options.pageName || 'Untitled page').slice(0, 80),
     desktopWidth: clampWidth(options.desktopWidth, 1440),
     mobileWidth: clampWidth(options.mobileWidth, 390),
+    format: ['html', 'react', 'vue'].includes(options.format) ? options.format : 'html',
   };
 
   const record = await Conversion.create({ name: opts.pageName, userId: req.user._id });
@@ -38,7 +39,7 @@ export const convert = asyncHandler(async (req, res) => {
     const tablet = await prepareInput(tabletFile, 'tablet');
     const mobile = await prepareInput(mobileFile, 'mobile');
     const { html, files, stats, warnings } = await convertDesign(desktop, mobile, opts, tablet);
-    const zipPath = await createZip(record.id, opts.pageName, html, files, { stats, warnings });
+    const zipPath = await createZip(record.id, opts.pageName, html, files, { stats, warnings, format: opts.format });
 
     record.status = 'done';
     record.zipPath = zipPath;
