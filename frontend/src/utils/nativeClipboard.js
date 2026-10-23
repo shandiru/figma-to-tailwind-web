@@ -1,4 +1,4 @@
-import { figmaPayload } from '../../../shared/figmaClipboard.js';
+import { figmaPayload } from './figmaClipboard.js';
 
 export function snapshotTransfer(transfer) {
   const types = [...(transfer?.types || [])];

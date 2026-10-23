@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { figmaPayload } from '../../shared/figmaClipboard.js';
+import { figmaPayload } from '../src/utils/figmaClipboard.js';
 import { clipboardInput, clipboardProblem, readOriginalClipboard, snapshotTransfer } from '../src/utils/nativeClipboard.js';
 import { demoDesign } from '../src/data/demo.js';
 

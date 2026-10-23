@@ -44,7 +44,7 @@ export async function pasteFigmaClipboard(input) {
 
 
 export async function previewLayerFile(file) {
-  if (file.size > 48 * 1024 * 1024) throw new Error('Choose a layer JSON file smaller than 48 MB, or export this frame in sections.');
+  if (file.size > 128 * 1024 * 1024) throw new Error('Choose a layer JSON file smaller than 128 MB.');
   const layers = await file.text();
   let design;
   try { design = JSON.parse(layers); }

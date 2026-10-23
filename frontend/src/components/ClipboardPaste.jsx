@@ -16,7 +16,7 @@ export default function ClipboardPaste({ enabled, disabled, onBusy, onPasted, la
     try {
       const inspect = () => {
         setReceived({ types: snapshot.types, characters: snapshot.values.reduce((sum, value) => sum + value.length, 0) });
-        if (snapshot.values.some(value => value.length > 48 * 1024 * 1024)) throw new Error('Copy a smaller selection (under 48 MB).');
+        if (snapshot.values.some(value => new Blob([value]).size > 128 * 1024 * 1024)) throw new Error('Copy a smaller selection (under 128 MB), or use Download JSON in the plugin.');
         return clipboardInput(snapshot.values);
       };
       let input = inspect();
