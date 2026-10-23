@@ -5,3 +5,4 @@ dist/
 backend/storage/
 *.log
 artifacts/*.png
+.fidelity-browser-check.json

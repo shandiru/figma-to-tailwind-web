@@ -2,6 +2,17 @@
 
 Export complete JSON with the included Figma plugin, upload desktop and mobile files, select matching sections on the design canvas and build editable HTML. JSON file upload is the only design import method. Text stays text; containers become HTML; artwork becomes WebP assets. The workspace includes a selectable design canvas, preview, code, conversion history and ZIP downloads.
 
+## Project structure
+
+```text
+backend/       Express API, database models, services, and backend tests
+frontend/      React/Vite app, UI components, and frontend tests
+figma-plugin/  Source plugin files for importing into Figma
+artifacts/     Saved conversion examples and generated visual checks
+```
+
+`backend/figma-plugin/` is a deployment copy of the plugin so the backend can serve it when deployed on its own. Update both plugin folders when changing the plugin. Keep generated examples that are useful for comparison in `artifacts/`; temporary browser-check metadata is ignored by Git.
+
 ## Setup
 
 Requirements: Node.js 22.12+ and MongoDB (local or Atlas).
