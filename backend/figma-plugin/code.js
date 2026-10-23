@@ -1,5 +1,5 @@
-const EXPORTER_VERSION = '1.14';
-figma.showUI(__html__, { width: 440, height: 560, title: `Frame to Code v${EXPORTER_VERSION}` });
+const EXPORTER_VERSION = '1.15';
+figma.showUI(__html__, { width: 440, height: 640, title: `Frame to Code v${EXPORTER_VERSION}` });
 let exporting = false;
 
 function errorMessage(error) {
@@ -101,7 +101,25 @@ function containsText(node) {
 function iconText(node) {
   if (node.type !== 'TEXT') return false;
   const font = node.fontName;
-  return font && typeof font === 'object' && (/font\s*awesome|material\s*(icons|symbols)|iconfont|icomoon|ionicons|glyphicons/i.test(font.family) || /[\uE000-\uF8FF]/.test(node.characters || ''));
+  return /[\uE000-\uF8FF]/.test(node.characters || '') ||
+    (font && typeof font === 'object' && /font\s*awesome|material\s*(icons|symbols)|iconfont|icomoon|ionicons|glyphicons/i.test(font.family));
+}
+
+function containsImage(node) {
+  if (node.visible === false) return false;
+  return (Array.isArray(node.fills) && node.fills.some(paint => paint.visible !== false && paint.type === 'IMAGE')) ||
+    (Array.isArray(node.children) && node.children.some(containsImage));
+}
+
+function svgSettings(outlineText) {
+  return { format: 'SVG', contentsOnly: true, svgOutlineText: Boolean(outlineText), svgIdAttribute: false, svgSimplifyStroke: false };
+}
+
+function emptySvg(bytes) {
+  const chunks = [];
+  for (let i = 0; i < bytes.length; i += 32768) chunks.push(String.fromCharCode(...bytes.subarray(i, i + 32768)));
+  const text = chunks.join('');
+  return /<svg\b/i.test(text) && !/<(?:path|rect|circle|ellipse|polygon|polyline|line|use|image|text)\b/i.test(text);
 }
 
 async function exportImageFill(node, paint, state) {
@@ -174,7 +192,7 @@ async function inheritVariableModes(source, target, state) {
   }
 }
 
-async function isolatedArtwork(node, layer, state) {
+async function isolatedArtwork(node, layer, state, vector = false) {
   if (typeof node.clone !== 'function' || typeof figma.createFrame !== 'function') return null;
   const matrix = (layer.transform || [[1, 0, 0], [0, 1, 0]]).map(row => [...row]);
   const width = node.width, height = node.height;
@@ -201,7 +219,8 @@ async function isolatedArtwork(node, layer, state) {
     stage.resize(Math.max(0.01, bounds.width), Math.max(0.01, bounds.height));
     clone.relativeTransform = [[1, 0, -x], [0, 1, -y]];
     stage.clipsContent = true;
-    const bytes = await stage.exportAsync({ format: 'PNG', contentsOnly: true, useAbsoluteBounds: true, constraint: { type: 'SCALE', value: artworkScale(bounds.width, bounds.height) } });
+    const bytes = await stage.exportAsync(vector ? svgSettings(true) : { format: 'PNG', contentsOnly: true, useAbsoluteBounds: true, constraint: { type: 'SCALE', value: artworkScale(bounds.width, bounds.height) } });
+    if (!bytes?.length || (vector && emptySvg(bytes))) throw new Error('Artwork export returned no visible content.');
     layer.width = bounds.width; layer.height = bounds.height;
     layer.transform = [
       [matrix[0][0], matrix[0][1], matrix[0][2] + matrix[0][0] * x + matrix[0][1] * y],
@@ -216,21 +235,29 @@ async function isolatedArtwork(node, layer, state) {
 
 async function exportArtwork(node, layer, state, outlineText) {
   const bounds = node.absoluteRenderBounds;
-  if (node.opacity === 0 || (bounds && (bounds.width <= 0 || bounds.height <= 0))) {
+  if (node.opacity === 0) {
     state.warnings.push(`Empty artwork "${node.name}" was skipped because it has no visible render bounds.`);
     return null;
   }
+  const preferSvg = state.preferSvg && !containsImage(node);
   if (state.rasterArtwork) {
-    const bytes = await isolatedArtwork(node, layer, state);
-    if (bytes) {
-      layer.asset = figma.base64Encode(bytes); layer.css = {}; layer.resolvedCss = {};
-      return layer;
+    try {
+      const bytes = await isolatedArtwork(node, layer, state, preferSvg);
+      if (bytes) {
+        layer.asset = figma.base64Encode(bytes); layer.css = {}; layer.resolvedCss = {};
+        return layer;
+      }
+    } catch (error) {
+      // Imported icons can fail cloning or isolation even when direct export works.
+      // Keep the original layer geometry until an export has succeeded.
+      if (!state.preferSvg) throw error;
+      state.warnings.push(`Isolated export of "${node.name}" failed; direct SVG/PNG recovery was attempted. ${errorMessage(error)}`);
     }
   }
   const origin = node.absoluteTransform || [[1, 0, 0], [0, 1, 0]];
   const relative = node.relativeTransform || [[1, 0, 0], [0, 1, 0]];
   const parent = node.parent && node.parent.absoluteTransform;
-  if (bounds && parent && Math.abs(parent[0][1]) < 0.0001 && Math.abs(parent[1][0]) < 0.0001 && parent[0][0] && parent[1][1]) {
+  if (bounds && bounds.width > 0 && bounds.height > 0 && parent && Math.abs(parent[0][1]) < 0.0001 && Math.abs(parent[1][0]) < 0.0001 && parent[0][0] && parent[1][1]) {
     layer.transform = [[1, 0, (bounds.x - parent[0][2]) / parent[0][0]], [0, 1, (bounds.y - parent[1][2]) / parent[1][1]]];
     layer.width = bounds.width / Math.abs(parent[0][0]);
     layer.height = bounds.height / Math.abs(parent[1][1]);
@@ -238,16 +265,17 @@ async function exportArtwork(node, layer, state, outlineText) {
     state.warnings.push(`Rotated artwork "${node.name}" may need position adjustment.`);
   }
   const hasPhoto = Array.isArray(node.fills) && node.fills.some(paint => paint.type === 'IMAGE' && paint.visible !== false);
-  const raster = hasPhoto || state.rasterArtwork;
+  const raster = hasPhoto || (state.rasterArtwork && !preferSvg);
   const pngSettings = { format: 'PNG', constraint: { type: 'SCALE', value: Math.min(2, 8192 / Math.max(layer.width, layer.height, 1), Math.sqrt(16000000 / Math.max(1, layer.width * layer.height))) } };
   let artwork;
   try {
-    artwork = await node.exportAsync(raster ? pngSettings : { format: 'SVG', svgOutlineText: Boolean(outlineText) });
+    artwork = await node.exportAsync(raster ? pngSettings : svgSettings(outlineText));
+    if (!artwork?.length || (!raster && emptySvg(artwork))) throw new Error('Artwork has no visible layers in its export.');
   } catch (error) {
-    if (!/not have any visible layers|no visible layers/i.test(errorMessage(error))) throw error;
+    if (!state.preferSvg && !/not have any visible layers|no visible layers/i.test(errorMessage(error))) throw error;
     // Some imported logo/vector nodes have no render bounds and fail SVG export
     // even though Figma can rasterise them. Try PNG before declaring them empty.
-    try { artwork = await node.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: 2 } }); }
+    try { artwork = await node.exportAsync(pngSettings); }
     catch (pngError) {
       if (!/not have any visible layers|no visible layers/i.test(errorMessage(pngError))) throw pngError;
       state.warnings.push(`Artwork "${node.name}" could not be exported as SVG or PNG because Figma found no visible content.`);
@@ -276,6 +304,11 @@ async function exportArtwork(node, layer, state, outlineText) {
     }
   }
   layer.asset = figma.base64Encode(artwork);
+  // A stroked line can have a zero layout side but still contain visible pixels.
+  // The HTML renderer needs a non-zero viewport to keep that icon in the output.
+  const strokeWidth = typeof node.strokeWeight === 'number' && Number.isFinite(node.strokeWeight) ? node.strokeWeight : 1;
+  if (!(layer.width > 0)) layer.width = Math.max(0.01, strokeWidth);
+  if (!(layer.height > 0)) layer.height = Math.max(0.01, strokeWidth);
   layer.css = {};
   layer.resolvedCss = {};
   return layer;
@@ -363,7 +396,7 @@ figma.ui.onmessage = async message => {
   }
   if (message.type !== 'export' || exporting) return;
   exporting = true;
-  const state = { count: 0, fonts: [], warnings: [], currentLayer: '', variables: new Map(), collections: new Map(), imageFills: new Map(), rasterArtwork: Boolean(message.rasterArtwork) };
+  const state = { count: 0, fonts: [], warnings: [], currentLayer: '', variables: new Map(), collections: new Map(), imageFills: new Map(), rasterArtwork: Boolean(message.rasterArtwork), preferSvg: Boolean(message.preferSvg) };
   try {
     const selection = figma.currentPage.selection;
     if (selection.length !== 1 || !('children' in selection[0])) throw new Error('Select one frame, component, or group in Figma first.');
@@ -381,6 +414,8 @@ figma.ui.onmessage = async message => {
       } catch (error) { state.warnings.push(`Figma comparison image unavailable: ${errorMessage(error)}`); }
     }
     const json = JSON.stringify(data, (key, value) => {
+      // Concrete styles are already merged into css; avoid sending them twice.
+      if (key === 'resolvedCss') return undefined;
       if ((key === 'asset' || key === 'backgroundImage') && typeof value === 'string') {
         let id = assetIds.get(value);
         if (!id) { id = `asset-${assetIds.size + 1}`; assetIds.set(value, id); assets[id] = value; }

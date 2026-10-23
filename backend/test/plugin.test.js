@@ -40,7 +40,8 @@ test('Copy complete design exports original layer data and copies it without a J
   elements.complete.onclick();
   assert.equal(posted.at(-1).pluginMessage.type, 'export');
   assert.equal(posted.at(-1).pluginMessage.rasterArtwork, true);
-  assert.equal(posted.at(-1).pluginMessage.includeReference, true);
+  assert.equal(posted.at(-1).pluginMessage.preferSvg, true);
+  assert.equal(posted.at(-1).pluginMessage.includeReference, false);
   assert.equal(elements.complete.disabled, true);
   const json = JSON.stringify({ format: 'figma-to-tailwind', version: 1, frame: { name: 'Complete frame', width: 1200, height: 800 }, assets: { photo: 'aW1hZ2U=' } });
   await context.onmessage({ data: { pluginMessage: { type: 'result', json, name: 'Complete frame', width: 1200, height: 800, count: 10 } } });
@@ -143,7 +144,7 @@ test('plugin UI keeps status above controls and progress does not re-enable copy
   assert.equal(posted[0].pluginMessage.type, 'ready');
   assert.equal(posted.at(-1).pluginMessage.type, 'export');
   assert.equal(posted.at(-1).pluginMessage.rasterArtwork, true);
-  assert.equal(posted.at(-1).pluginMessage.includeReference, true);
+  assert.equal(posted.at(-1).pluginMessage.includeReference, false);
   context.onmessage({ data: { pluginMessage: { type: 'progress', count: 15, name: 'Artwork' } } });
   assert.equal(elements.export.disabled, true);
   assert.equal(elements.copy.disabled, true);
@@ -194,7 +195,7 @@ test('handles Figma string rejections and attempts export before discarding null
   frame.children = [
     { ...leaf('String rejection'), exportAsync: async () => { throw 'Failed to export node. This node may not have any visible layers.'; } },
     { ...leaf('Null bounds'), absoluteRenderBounds: null, exportAsync: async () => new Uint8Array([4, 5, 6]) },
-    { ...leaf('Zero bounds'), absoluteRenderBounds: { width: 0, height: 20 }, exportAsync: () => assert.fail('No artwork to export') },
+    { ...leaf('Zero bounds'), absoluteRenderBounds: { width: 0, height: 20 }, exportAsync: async () => { throw new Error('No visible layers'); } },
     { ...leaf('Visible icon'), exportAsync: async () => new Uint8Array([1, 2, 3]) },
   ];
   const figma = {
@@ -204,11 +205,11 @@ test('handles Figma string rejections and attempts export before discarding null
   };
   vm.runInNewContext(code, { figma, __html__: '' });
   await figma.ui.onmessage({ type: 'ready' });
-  assert.equal(messages[0].version, '1.14');
+  assert.equal(messages[0].version, '1.15');
   await figma.ui.onmessage({ type: 'export' });
   const result = messages.find(message => message.type === 'result');
   assert.ok(result, JSON.stringify(messages));
-  assert.equal(result.exporterVersion, '1.14');
+  assert.equal(result.exporterVersion, '1.15');
   const design = JSON.parse(result.json);
   assert.equal(design.frame.children.length, 2);
   assert.equal(design.frame.children[0].name, 'Null bounds');
@@ -430,7 +431,7 @@ test('complete artwork uses local render bounds and applies rotation only once, 
     const layer = design.frame.children[0];
     assert.equal(layer.width, 108); assert.equal(layer.height, 72);
     assert.deepEqual(layer.transform, [[0, -1, 206], [1, 0, 96]]);
-    assert.equal(design.exporterVersion, '1.14');
+    assert.equal(design.exporterVersion, '1.15');
   }
 });
 

@@ -166,7 +166,9 @@ export async function convertLayers(desktop, mobile, opts) {
       if (node.backgroundMode && !['FIT', 'FILL', 'EXACT'].includes(node.backgroundMode)) warnings.add('Some image crops use a centered cover approximation. Re-export with plugin v1.5 or later to retain their Figma crop.');
     }
     const name = escape(node.name || node.type || 'Layer');
-    if (node.type === 'TEXT') {
+    // Icon fonts are outlined by the plugin but retain their Figma TEXT type.
+    // Render their exported artwork instead of an empty text container.
+    if (node.type === 'TEXT' && !node.asset) {
       textCount++;
       registerFont(css);
       let text = escape(node.text);

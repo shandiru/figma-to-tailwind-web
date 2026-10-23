@@ -32,6 +32,8 @@ Plugin v1.13 normalizes group transforms to immediate-parent coordinates. Figma 
 
 ## Upload complete JSON and select sections
 
+Plugin v1.15 keeps vector icons as SVG and recovers empty/failed exports via PNG. Outlined font icons now render as artwork in the backend. Comparison screenshots are optional (off by default), duplicate styles are omitted, and gzip packing starts at 32 KB. For smaller photo-heavy files, enable the optional WebP compression checkbox (94% quality, slight quality loss). Deploy the updated backend and re-import the plugin; existing exports cannot recover missing artwork. This reduces payload sizes but does not guarantee every frame fits Vercel's request limit.
+
 1. Import the updated `figma-plugin/manifest.json` in Figma. Run **Frame to Code v1.13** on your frame, click **Export complete JSON**, then **Download JSON**.
 2. Open **Upload JSON** in the app and upload your desktop file. The rendered design and layer list open immediately. Repeat for the mobile file if needed. Ordinary and gzip-packed exports are supported, up to 128 MB each.
 3. Toggle **Figma original / Generated HTML** to compare the source with the actual HTML rendering. Choose the corresponding sections on each canvas. The original upload stays available while changing sections; replacing one version preserves the other version.

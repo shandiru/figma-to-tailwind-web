@@ -1,5 +1,11 @@
 # Frame to Code: copy Figma layers
 
+v1.15 exports vector icons as SVG, with outlined icon fonts and PNG fallback for empty/failed SVG exports. Visible stroked lines are attempted even when Figma reports a zero render dimension. Isolation failures recover using direct export. The backend also renders outlined TEXT icons as artwork instead of empty text containers; deploy the updated backend with the plugin.
+
+For smaller JSON, the full-frame comparison image is now optional and off by default. Enable **Include Figma original comparison image** when you need the comparison view. Duplicate resolved styles are omitted, repeated artwork is still deduplicated, and gzip packing starts at 32 KB. Vector icons, ordinary text and geometry remain intact.
+
+For photo-heavy designs, optionally enable **Smaller photos and raster artwork**. This uses WebP at 94% quality at the original exported pixel dimensions, preserving transparency but allowing slight color/detail loss. SVG vectors and small raster icons are untouched. If browser encoding fails or makes an image larger, the original is retained. Without this option, raster artwork bytes are unchanged.
+
 v1.13 writes transforms relative to the immediate parent by calculating inverse(parent.absoluteTransform) ? node.absoluteTransform. Figma relativeTransform skips GROUP/BOOLEAN_OPERATION parents, so using it directly had applied group offsets twice. The export now includes coordinateSpace: parent. The app also normalizes unmarked v1.10?v1.12 exports automatically on import.
 
 v1.12 applies bound paint alpha once. SolidPaint.opacity already carries the effective transparency; multiplying it by the COLOR variable alpha made 5% backgrounds become 0.25%, hiding secondary buttons, radio controls, text areas and select backgrounds. Re-export for accurate transparent styles.
@@ -27,7 +33,7 @@ v1.4 resolves bound paint colors using each layer's variable mode. Concrete fill
 5. In the converter, open **Upload JSON** and upload the file under Desktop or Mobile. Compare **Figma original** with **Generated HTML**, select matching sections, then build. Copy complete design can also be pasted under Paste design.
 6. Repeat for the other frame if needed, then build the page.
 
-No account token, network access, permanent document changes, or AI is used by the plugin. It reads the selected frame and exports its computed layer geometry and visual styles. Text becomes HTML text; containers become elements; artwork and text-free masked illustrations become assets. Temporary paint rectangles, artwork clones and viewport frames are removed even if export fails. Copy complete design also includes a bounded PNG of the original frame for the comparison view. This reference is never substituted for generated HTML.
+No account token, network access, permanent document changes, or AI is used by the plugin. It reads the selected frame and exports its computed layer geometry and visual styles. Text becomes HTML text; containers become elements; artwork and text-free masked illustrations become assets. Temporary paint rectangles, artwork clones and viewport frames are removed even if export fails. When enabled, the comparison option includes a bounded PNG of the original frame. This reference is never substituted for generated HTML.
 
 The converter retains absolute layer geometry and scales each frame to fit. Supplying both frames switches layouts at 768px. It does not infer flexbox reflow, implement Figma prototype interactions, or guarantee exact rendering of masks, complex blends, custom fonts, advanced image crops, and text metrics. Name a container `Button` or `CTA` to emit a button; implement its behavior in the generated HTML. Fonts must be available locally or on Google Fonts. Frame widths come from the exported layers.
 
