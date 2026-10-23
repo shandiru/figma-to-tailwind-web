@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import StudioIcon from './StudioIcon.jsx';
 
 export default function JsonUpload({ title, file, onChange, disabled }) {
   const [dragging, setDragging] = useState(false);
@@ -28,17 +29,17 @@ export default function JsonUpload({ title, file, onChange, disabled }) {
     onChange(files[0]);
   };
   return <section className="min-w-0">
-    <div className="mb-3 flex items-center justify-between text-sm"><h3 className="font-semibold text-slate-700">{title}</h3><span className={`px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${file ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>{file ? 'Connected' : 'Optional'}</span></div>
+    <div className="mb-2.5 flex items-center justify-between text-xs"><h3 className="flex items-center gap-2 font-semibold text-slate-700"><StudioIcon name={title.startsWith('Mobile') ? 'phone' : 'monitor'} size={14}/>{title}</h3><span className={`text-[9px] font-medium ${file ? 'text-emerald-600' : 'text-slate-400'}`}>{file ? '✓ Added' : '.JSON'}</span></div>
     <div tabIndex={disabled ? -1 : 0} role="button" aria-disabled={disabled} aria-label={`Upload ${title} JSON`}
       onClick={() => !disabled && input.current.click()}
       onKeyDown={event => { if (['Enter', ' '].includes(event.key)) { event.preventDefault(); if (!disabled) input.current.click(); } }}
       onDragOver={event => { event.preventDefault(); if (!disabled) setDragging(true); }} onDragLeave={() => setDragging(false)}
       onDrop={event => { event.preventDefault(); setDragging(false); receive(event.dataTransfer.files); }}
       className={`json-upload ${dragging ? 'is-dragging' : ''} ${file ? 'has-file' : ''} ${disabled ? 'opacity-50' : ''}`}>
-      <div className={`mb-5 grid h-12 w-12 place-items-center ${file ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-50 text-violet-500'}`}><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">{file ? <path d="m5 12 4 4L19 6"/> : <><rect x="4" y="4" width="16" height="16"/><path d="M12 8v8m-4-4h8"/></>}</svg></div>
-      <p className="max-w-full truncate text-sm font-semibold text-slate-800">{summary?.name || 'Upload Figma design JSON'}</p>
-      <p className="mt-2 text-center text-xs leading-6 text-slate-400">{summary ? `${summary.width} × ${summary.height} · ${summary.count} editable layers` : <>Export the frame with artwork from the plugin.<br/>Click or drop its JSON file here.</>}</p>
-      <span className="mt-5 text-[11px] font-medium text-violet-500">{file ? 'Click to replace frame' : 'Text, styles & geometry included'}</span>
+      <div className={`mb-3 grid h-9 w-9 place-items-center ${file ? 'bg-emerald-50 text-emerald-600' : 'bg-white text-violet-500 shadow-sm'}`}><StudioIcon name={file ? 'check' : 'upload'} size={17}/></div>
+      <p className="max-w-full truncate text-xs font-semibold text-slate-800" title={summary?.name || file?.name}>{summary?.name || 'Drop your JSON here'}</p>
+      <p className="mt-1.5 text-center text-[10px] leading-5 text-slate-400">{summary ? `${summary.width} × ${summary.height} · ${summary.count} layers` : <>or <span className="font-medium text-violet-600">browse files</span> to upload</>}</p>
+      {file && <span className="mt-2 max-w-full truncate font-mono text-[9px] text-slate-400" title={file.name}>{file.size >= 1048576 ? `${(file.size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`} · Click to replace</span>}
     </div>
     {file && <button type="button" disabled={disabled} onClick={() => { setError(''); onChange(null); }} className="mt-2 text-xs text-slate-400 hover:text-red-500">Remove frame</button>}
     {error && <p role="alert" className="mt-3 text-xs leading-5 text-red-600">{error}</p>}

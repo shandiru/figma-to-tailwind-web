@@ -25,17 +25,15 @@ export const register = asyncHandler(async (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   if (name.length < 2 || name.length > 80 || /[\x00-\x1f\x7f]/.test(name)) throw new ApiError(400, 'Enter your name (2 to 80 characters).');
   const password = validatePassword(req.body?.password);
+  if (await User.exists({ email })) throw new ApiError(409, 'This email is already registered. Please sign in.');
   await sendLimits(email);
   const passwordHash = await hashPassword(password);
   const challengeId = opaqueToken();
-  // Return the same shape for registered addresses to avoid account enumeration.
-  if (!(await User.exists({ email }))) {
-    const code = newOtp();
-    await AuthChallenge.create({ _id: challengeId, name, email, passwordHash, otpHash: otpHash(challengeId, code), attempts: 0, resendAfter: new Date(Date.now() + 60000), expiresAt: new Date(Date.now() + TEN_MINUTES) });
-    try { await emailService.sendVerification(email, code); }
-    catch (error) { await AuthChallenge.deleteOne({ _id: challengeId }); throw error; }
-  }
-  res.status(202).json({ challengeId, resendAfter: 60, message: 'If this email is eligible, a verification code has been sent. Already have an account? Sign in.' });
+  const code = newOtp();
+  await AuthChallenge.create({ _id: challengeId, name, email, passwordHash, otpHash: otpHash(challengeId, code), attempts: 0, resendAfter: new Date(Date.now() + 60000), expiresAt: new Date(Date.now() + TEN_MINUTES) });
+  try { await emailService.sendVerification(email, code); }
+  catch (error) { await AuthChallenge.deleteOne({ _id: challengeId }); throw error; }
+  res.status(202).json({ challengeId, resendAfter: 60, message: 'A verification code has been sent to your email.' });
 });
 export const verifyEmail = asyncHandler(async (req, res) => {
   const { challengeId, code } = req.body || {};

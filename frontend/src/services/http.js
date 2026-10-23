@@ -1,5 +1,8 @@
-export const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+import { resolveApiBase } from './apiConfig.js';
+
+export const API_BASE = resolveApiBase({ production: import.meta.env.PROD, configured: import.meta.env.VITE_API_URL });
 let csrfToken = '';
+let sessionRevision = 0;
 export const setCsrfToken = value => { csrfToken = value || ''; };
 
 export async function apiFetch(path, options = {}) {
@@ -18,11 +21,21 @@ export async function apiFetch(path, options = {}) {
   return response;
 }
 export async function authRequest(action, data) {
+  const revision = ['login', 'verify-email', 'logout'].includes(action) ? ++sessionRevision : sessionRevision;
   const response = await apiFetch(`/auth/${action}`, data === undefined ? {} : {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
   });
-  if (response.status === 204) { setCsrfToken(''); return null; }
+  if (response.status === 204) { if (revision === sessionRevision) setCsrfToken(''); return null; }
   const result = await response.json();
-  if (result.csrfToken) setCsrfToken(result.csrfToken);
+  if (result.csrfToken && revision === sessionRevision) setCsrfToken(result.csrfToken);
+  if (action === 'login' || action === 'verify-email') {
+    // Confirm the browser kept the cookie before opening the workspace.
+    try { return await authRequest('me'); }
+    catch (error) {
+      if (revision === sessionRevision) setCsrfToken('');
+      if (error.status === 401) throw new Error('Your browser could not keep the sign-in session. Allow cookies for this site and try again.');
+      throw error;
+    }
+  }
   return result;
 }

@@ -87,6 +87,21 @@ test('expired OTPs and OTPs after five wrong attempts cannot create accounts', a
   assert.equal(f.store.users.size, 0);
 });
 
+test('an email can register only once, including uppercase and surrounding spaces', async t => {
+  const f = await fixture(t); const signup = await f.register();
+  const verified = await f.post('verify-email', { challengeId: signup.challengeId, code: f.messages[0].code });
+  assert.equal(verified.status, 200);
+  const originalHash = [...f.store.users.values()][0].passwordHash;
+  for (const email of ['designer@example.com', '  DESIGNER@EXAMPLE.COM  ']) {
+    const response = await f.post('register', { name: 'Another name', email, password: 'a different long passphrase' });
+    assert.equal(response.status, 409);
+    assert.match((await response.json()).error, /already registered/);
+  }
+  assert.equal(f.messages.length, 1, 'Duplicate signup must not send another verification email');
+  assert.equal(f.store.users.size, 1);
+  assert.equal([...f.store.users.values()][0].passwordHash, originalHash, 'Existing credentials remain intact');
+});
+
 test('resend is throttled, invalidates the old code, and never exposes OTPs in HTTP responses', async t => {
   const f = await fixture(t); const signup = await f.register();
   assert.equal((await f.post('resend-code', { challengeId: signup.challengeId })).status, 429);
