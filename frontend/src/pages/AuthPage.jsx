@@ -56,8 +56,8 @@ export default function AuthPage({ onAuthenticated, notice = '', superAdminRegis
       <Brand light/>
       <div className="relative z-10 max-w-lg py-16">
         <p className="mb-7 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[.25em] text-violet-300"><span className="h-px w-8 bg-violet-400"/>A place for your next idea</p>
-        <h1 className="text-5xl font-medium leading-[1.12] tracking-[-.04em] xl:text-6xl">From your canvas.<br/><span className="text-violet-300">To the open web.</span></h1>
-        <p className="mt-7 max-w-sm text-base leading-7 text-slate-300">Bring your Figma layers into a workspace built for making. Real text, your artwork, and code you can call your own.</p>
+        <h1 className="text-5xl font-medium leading-[1.12] tracking-[-.04em] xl:text-6xl">Convert Figma designs.<br/><span className="text-violet-300">Build responsive code.</span></h1>
+        <p className="mt-7 max-w-sm text-base leading-7 text-slate-300">Turn Figma frames into editable Tailwind CSS, HTML, React, or Vue while preserving real text, artwork, and responsive layouts.</p>
         <div className="auth-diagram mt-12 border border-white/15 bg-white/[.035] p-6" aria-hidden="true"><div className="mb-5 flex justify-between font-mono text-[10px] uppercase tracking-widest text-slate-400"><span>design.fig</span><span>index.html</span></div><div className="flex items-center gap-5"><div className="grid h-16 w-24 grid-cols-3 gap-1 border border-violet-300/40 p-2"><span className="col-span-2 bg-violet-300/70"/><span className="row-span-2 bg-violet-200/20"/><span className="col-span-2 bg-violet-200/20"/></div><span className="text-2xl text-violet-300">→</span><div className="font-mono text-sm leading-6"><span className="text-violet-300">&lt;main&gt;</span><br/><span className="pl-3 text-slate-200">Your next idea.</span><br/><span className="text-violet-300">&lt;/main&gt;</span></div></div></div>
       </div>
       <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-white/15 pt-6 text-xs text-slate-400"><span>Editable HTML</span><span>Responsive layouts</span><span>Your private workspace</span></div>
