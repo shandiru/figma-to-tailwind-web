@@ -1,7 +1,7 @@
 {
   "name": "Frame to Code",
   "short_name": "Frame to Code",
-  "description": "Convert Figma designs into editable, responsive Tailwind CSS, HTML, React, or Vue code.",
+  "description": "Convert Figma designs into pixel-perfect, responsive Tailwind CSS, HTML, React, or Vue code.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
