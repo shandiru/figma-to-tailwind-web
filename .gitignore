@@ -3,7 +3,6 @@ dist/
 .env*
 !.env.example
 backend/storage/
-backend/secrets/
 *.log
 artifacts/*.png
 .fidelity-browser-check.json
