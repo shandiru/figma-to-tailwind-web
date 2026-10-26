@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env*
 !.env.example
+backend/secrets/
 backend/storage/
 *.log
 artifacts/*.png
