@@ -23,27 +23,13 @@
 
 5. Run `node backend/scripts/dailySeoKeywords.mjs` from the repository root. Google OAuth access tokens are generated and refreshed by `google-auth-library`; do not create or store an access token yourself.
 
-For a local, always-on Node process, run immediately and then every four hours with:
+To run it daily at 10:26 AM Sri Lanka time on a local, always-on Node process, use:
 
 ```powershell
 npm run schedule:seo --prefix backend
 ```
 
-Keep that process running. The scheduler uses `setTimeout`, starts one run immediately, then waits four hours after each run finishes before starting the next one. You can change the interval with `SEO_INTERVAL_HOURS` in `backend/.env`. This local scheduler does not run on Vercel serverless functions.
-
-## Vercel deployment
-
-Vercel serverless functions cannot keep a `setTimeout` alive between requests. The backend project now includes a protected Cron endpoint at `/api/seo-cron` and a Vercel schedule in `backend/vercel.json`. Set the Vercel backend project's Root Directory to `backend`, then add these Project Environment Variables before redeploying:
-
-- `GOOGLE_SERVICE_ACCOUNT_JSON`: the full contents of the service account JSON key. Do not use the local file path on Vercel.
-- `SEO_GA4_PROPERTY_ID`, `SEO_SEARCH_CONSOLE_SITE`, `GROQ_API_KEY`, `GROQ_MODEL`.
-- `EMAIL_USER`, `EMAIL_PASS`, `SEO_REPORT_TO`, and optionally `SMTP_HOST` / `SMTP_PORT`.
-- `CRON_SECRET`: a random secret with at least 32 characters. Vercel sends it to the protected Cron endpoint automatically.
-- Optionally, `SEO_PAGE_TITLE`, `SEO_PAGE_DESCRIPTION`, and `SEO_CURRENT_KEYWORDS` to supply the deployed frontend context for analysis.
-
-The checked-in schedule `30 4 * * *` is 04:30 UTC (about 10:00 AM Sri Lanka time). Vercel Hobby permits only one Cron run per day, with up to an hour of timing variance. To run every four hours, use a Vercel Pro project and change the cron expression to `0 */4 * * *`. Cron runs only on production deployments; redeploy the backend project after adding the configuration. Vercel logs for `/api/seo-cron` show each run.
-
-The Vercel job sends the Search Console and GA4 report with suggested keywords. It runs in report-only mode because a serverless function cannot persist edits to the separately deployed static `frontend/index.html`. The local scheduler can still edit that file. To publish Vercel keyword changes automatically, add a persistent content store or a secure deployment/update flow for the frontend.
+Keep that process running. The scheduler uses `setTimeout`, reads `SEO_SCHEDULE_TIMEZONE`, `SEO_SCHEDULE_HOUR`, and `SEO_SCHEDULE_MINUTE` from `backend/.env`, and runs the SEO script at the next scheduled time. It is for a continuously running local/Node server, not Vercel serverless functions.
 
 ## Scheduling and deployment
 

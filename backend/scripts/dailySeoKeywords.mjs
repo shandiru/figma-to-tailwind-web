@@ -203,22 +203,17 @@ function replaceKeywordMeta(html, keywords) {
   return html.replace(/(<meta\s+name="keywords"\s+content=")[^"]*("\s*\/?>)/i, (_match, before, after) => `${before}${content}${after}`);
 }
 
-export async function runSeoJob({ updateHtml = true } = {}) {
+async function main() {
   for (const name of requiredEnv) requireEnv(name);
   const credentials = await loadGoogleCredentials();
   if (!credentials.client_email || !credentials.private_key) throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email or private_key.');
 
-  let html = '';
-  if (updateHtml) html = await readFile(siteFile, 'utf8');
-  const pageTitle = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim()
-    || process.env.SEO_PAGE_TITLE?.trim() || 'Figma to Code Converter';
-  const pageDescription = html.match(/<meta\s+name="description"\s+content="([^"]*)"/i)?.[1]?.trim()
-    || process.env.SEO_PAGE_DESCRIPTION?.trim() || 'Convert Figma designs into responsive HTML, React, Vue, and Tailwind code.';
-  const current = html.match(/<meta\s+name="keywords"\s+content="([^"]*)"/i)?.[1]
-    || process.env.SEO_CURRENT_KEYWORDS?.trim();
-  const currentKeywords = current
-    ? current.split(',').map(value => value.trim()).filter(Boolean)
-    : ['Figma to code converter', 'Figma to Tailwind CSS', 'Figma to React', 'Figma to Vue', 'responsive HTML generator', 'design to code tool'];
+  const html = await readFile(siteFile, 'utf8');
+  const pageTitle = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || '';
+  const pageDescription = html.match(/<meta\s+name="description"\s+content="([^"]*)"/i)?.[1]?.trim() || '';
+  const current = html.match(/<meta\s+name="keywords"\s+content="([^"]*)"/i)?.[1];
+  if (!current) throw new Error('Could not read the keywords meta tag in frontend/index.html.');
+  const currentKeywords = current.split(',').map(value => value.trim()).filter(Boolean);
 
   const auth = new GoogleAuth({
     credentials,
@@ -255,9 +250,9 @@ export async function runSeoJob({ updateHtml = true } = {}) {
       }
     }
   }
-  const updatedHtml = updateHtml ? replaceKeywordMeta(html, keywords) : html;
+  const updatedHtml = replaceKeywordMeta(html, keywords);
   const normalizeKeywordSet = values => values.map(normalize).sort().join('|');
-  const changed = updateHtml && normalizeKeywordSet(currentKeywords) !== normalizeKeywordSet(keywords);
+  const changed = normalizeKeywordSet(currentKeywords) !== normalizeKeywordSet(keywords);
   const topQueries = [...performance.queries].sort((a, b) => b.impressions - a.impressions).slice(0, 8);
   const report = {
     date: new Date().toISOString().slice(0, 10),
@@ -265,7 +260,6 @@ export async function runSeoJob({ updateHtml = true } = {}) {
     keywords,
     summary,
     changed,
-    keywordWriteMode: updateHtml ? 'local-file' : 'report-only',
     googleAnalyticsOrganic: performance.organicGoogle,
     googleAnalyticsOrganicLandingPages: performance.organicLandingPages.slice(0, 10),
     googleAnalyticsLandingPages: performance.analyticsLandingPages.slice(0, 10),
@@ -276,13 +270,10 @@ export async function runSeoJob({ updateHtml = true } = {}) {
   const reportPath = process.env.SEO_SUMMARY_FILE;
   if (reportPath) await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
   await sendSeoSummary(report);
-  console.log(changed ? `Updated ${keywords.length} keywords.` : `${updateHtml ? 'Keywords are unchanged' : 'Vercel cron ran in report-only mode'}; the data summary was emailed.`);
-  return report;
+  console.log(changed ? `Updated ${keywords.length} keywords.` : 'Keywords are unchanged; the data summary was emailed.');
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  runSeoJob().catch(error => {
-    console.error(error.message);
-    process.exitCode = 1;
-  });
-}
+main().catch(error => {
+  console.error(error.message);
+  process.exitCode = 1;
+});

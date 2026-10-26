@@ -29,9 +29,7 @@ export async function sendSeoSummary(report) {
   const organicPages = bullets((report.googleAnalyticsOrganicLandingPages || []).map(row => `${row.landingPage}: ${row.sessions} sessions, ${row.activeUsers} active users`));
   const allPages = bullets((report.googleAnalyticsLandingPages || []).map(row => `${row.sourceMedium} — ${row.landingPage}: ${row.sessions} sessions, ${row.activeUsers} active users`));
   const queries = bullets((report.topQueries || []).map(row => `${row.query}: ${row.impressions} impressions, ${row.clicks} clicks, position ${Number(row.position).toFixed(1)}`));
-  const status = report.keywordWriteMode === 'report-only'
-    ? 'Vercel cron sent the analysis and suggested keywords by email. It cannot write to the deployed static frontend file.'
-    : report.changed ? 'Keywords were updated in frontend/index.html.' : 'Keywords did not change; the existing page keywords were kept.';
+  const status = report.changed ? 'Keywords were updated in frontend/index.html.' : 'Keywords did not change; the existing page keywords were kept.';
   const text = [
     'Daily SEO performance summary',
     status,
