@@ -33,34 +33,41 @@ export const convert = asyncHandler(async (req, res) => {
     format: ['html', 'react', 'vue'].includes(options.format) ? options.format : 'html',
   };
 
-  const record = await Conversion.create({ name: opts.pageName, userId: req.user._id });
+  const record = req.user?._id ? await Conversion.create({ name: opts.pageName, userId: req.user._id }) : null;
+  const conversionId = record?.id || new mongoose.Types.ObjectId().toString();
   try {
     const desktop = await prepareInput(desktopFile, 'desktop');
     const tablet = await prepareInput(tabletFile, 'tablet');
     const mobile = await prepareInput(mobileFile, 'mobile');
     const { html, files, stats, warnings } = await convertDesign(desktop, mobile, opts, tablet);
-    const zipPath = await createZip(record.id, opts.pageName, html, files, { stats, warnings, format: opts.format });
+    const zipPath = await createZip(conversionId, opts.pageName, html, files, { stats, warnings, format: opts.format });
 
-    record.status = 'done';
-    record.zipPath = zipPath;
-    await record.save();
+    if (record) {
+      record.status = 'done';
+      record.zipPath = zipPath;
+      await record.save();
+    }
 
-    res.setHeader('X-Conversion-Id', record.id);
+    res.setHeader('X-Conversion-Id', conversionId);
     res.download(zipPath, fileName(opts.pageName));
   } catch (err) {
-    record.status = 'failed';
-    record.error = err.message;
-    await record.save();
+    if (record) {
+      record.status = 'failed';
+      record.error = err.message;
+      await record.save();
+    }
     throw err;
   }
 });
 
 export const history = asyncHandler(async (req, res) => {
+  if (!req.user?._id) return res.json([]);
   const items = await Conversion.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(50).select('name status createdAt error');
   res.json(items);
 });
 
 export const downloadById = asyncHandler(async (req, res) => {
+  if (!req.user?._id) throw new ApiError(404, 'Conversion not found.');
   if (!mongoose.isObjectIdOrHexString(req.params.id)) throw new ApiError(404, 'Conversion not found.');
   const item = await Conversion.findOne({ _id: req.params.id, userId: req.user._id });
   if (!item || item.status !== 'done' || !item.zipPath) throw new ApiError(404, 'Conversion not found.');

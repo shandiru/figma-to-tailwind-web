@@ -5,7 +5,6 @@ import routes from './routes/index.js';
 import { env } from './config/env.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 import authRoutes from './routes/auth.js';
-import { requireAuth, requireCsrf } from './middleware/auth.js';
 import { requireDatabase } from './middleware/database.js';
 
 const app = express();
@@ -22,8 +21,8 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 app.use('/api/auth', authRoutes);
-// Authenticate before allocating memory for design uploads.
-app.use('/api', requireAuth, requireCsrf);
+// The design workspace is available without an account. Authentication stays
+// available for legacy account and admin endpoints under /api/auth.
 app.use('/api/layers/preview', express.json({ limit: '140mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/api', routes);
