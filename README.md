@@ -68,6 +68,8 @@ The exported Express app awaits a shared MongoDB connection before handling API 
 
 The workspace now requires an account. Registration sends a six-digit email code, valid for 10 minutes with a maximum of five verification attempts. A code can only be used once. Resending invalidates the previous code and is limited to one email per minute and five per hour. Sign-in uses the verified email and password (15–128 characters). Passwords use salted scrypt; OTPs use keyed hashes; session tokens are stored as hashes. MongoDB stores session expiry and throttles so they survive serverless instance changes. Design history and ZIP downloads are scoped to the signed-in user. Legacy conversions without a user are not exposed to any account.
 
+Forgotten passwords can be reset from the sign-in page. Reset links are sent to the account email, expire after 15 minutes, work once, and revoke existing sessions when used. Configure backend SMTP settings and CLIENT_URL so reset emails can be delivered and link back to the deployed frontend.
+
 To create a Super Admin account, set `SUPER_ADMIN_CREATE_KEYWORD` in the **backend** `.env` (or backend hosting environment) to a long, private phrase. Enter that phrase on `/super-admin/register`, then complete email verification. Keep the value out of the frontend environment and source control. Super Admins land on a separate dashboard with verified account details, valid session status, recent signups, and the latest 50 audit events. Audit events cover verified signups, successful and failed sign-ins, sign-outs, and dashboard views. The server checks the Super Admin role before returning dashboard data.
 
 Set these **backend** hosting environment variables:

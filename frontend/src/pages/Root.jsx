@@ -6,12 +6,14 @@ import Brand from '../components/Brand.jsx';
 
 export default function Root() {
   const superAdminRegistration = window.location.pathname === '/super-admin/register';
+  const passwordReset = new URLSearchParams(window.location.hash.slice(1)).has('resetToken');
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!passwordReset);
   const [notice, setNotice] = useState('');
   const [signingOut, setSigningOut] = useState(false);
   const authRevision = useRef(0);
   useEffect(() => {
+    if (passwordReset) return undefined;
     let active = true;
     const expired = async () => {
       const revision = authRevision.current;
@@ -30,7 +32,7 @@ export default function Root() {
       if (active && error.status !== 401) setNotice('We could not connect to your account. Please try signing in.');
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; window.removeEventListener('auth:expired', expired); };
-  }, []);
+  }, [passwordReset]);
   const logout = async () => {
     authRevision.current++;
     setSigningOut(true); setNotice('');

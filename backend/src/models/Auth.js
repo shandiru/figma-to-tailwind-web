@@ -17,6 +17,11 @@ const sessionSchema = new mongoose.Schema({
   csrfToken: { type: String, required: true },
   expiresAt: { type: Date, required: true, expires: 0 },
 });
+const passwordResetSchema = new mongoose.Schema({
+  _id: String,
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  expiresAt: { type: Date, required: true, expires: 0 },
+});
 const throttleSchema = new mongoose.Schema({
   _id: String,
   count: { type: Number, default: 0 },
@@ -33,5 +38,6 @@ auditLogSchema.index({ createdAt: -1 });
 
 export const AuthChallenge = mongoose.model('AuthChallenge', challengeSchema);
 export const AuthSession = mongoose.model('AuthSession', sessionSchema);
+export const PasswordReset = mongoose.model('PasswordReset', passwordResetSchema);
 export const AuthThrottle = mongoose.model('AuthThrottle', throttleSchema);
 export const AuditLog = mongoose.model('AuditLog', auditLogSchema);

@@ -1,5 +1,5 @@
 import { User } from '../models/User.js';
-import { AuditLog, AuthChallenge, AuthSession } from '../models/Auth.js';
+import { AuditLog, AuthChallenge, AuthSession, PasswordReset } from '../models/Auth.js';
 import { emailService } from '../services/emailService.js';
 import { checkPassword, hashPassword, newOtp, normalizeEmail, opaqueToken, otpHash, publicUser, safeEqual, tokenHash, validatePassword } from '../services/authSecurity.js';
 import { COOKIE_NAME, SESSION_MS, consumeLimit, cookieOptions, sessionToken } from '../middleware/auth.js';
@@ -89,6 +89,39 @@ export const login = asyncHandler(async (req, res) => {
   await user.save();
   await recordAudit('auth.login', { id: user._id, email: user.email });
   await startSession(req, res, user);
+});
+export const requestPasswordReset = asyncHandler(async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  await consumeLimit(`password-reset-email:${email}`, 5, 60 * 60 * 1000);
+  const user = await User.findOne({ email, verifiedAt: { $exists: true, $ne: null } });
+  if (user) {
+    await PasswordReset.deleteMany({ userId: user._id });
+    const token = opaqueToken();
+    await PasswordReset.create({ _id: tokenHash(token), userId: user._id, expiresAt: new Date(Date.now() + 15 * 60 * 1000) });
+    const frontendUrl = (env.clientUrl || 'http://localhost:5173').split(',')[0].trim().replace(/\/$/, '');
+    const link = new URL('/', frontendUrl);
+    link.hash = new URLSearchParams({ resetToken: token }).toString();
+    try { await emailService.sendPasswordReset(email, link.toString()); }
+    catch (error) { await PasswordReset.deleteOne({ _id: tokenHash(token) }); throw error; }
+    await recordAudit('auth.password_reset_requested', { id: user._id, email });
+  }
+  res.json({ message: 'If an account exists for that email, a password reset link has been sent.' });
+});
+export const completePasswordReset = asyncHandler(async (req, res) => {
+  const { token, password } = req.body || {};
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw new ApiError(400, 'This reset link is invalid or expired. Request a new one.');
+  const resetId = tokenHash(token);
+  const available = await PasswordReset.findOne({ _id: resetId, expiresAt: { $gt: new Date() } });
+  if (!available) throw new ApiError(400, 'This reset link is invalid, expired, or already used. Request a new one.');
+  const newPasswordHash = await hashPassword(validatePassword(password));
+  const reset = await PasswordReset.findOneAndDelete({ _id: resetId, expiresAt: { $gt: new Date() } });
+  if (!reset) throw new ApiError(400, 'This reset link is invalid, expired, or already used. Request a new one.');
+  const user = await User.findByIdAndUpdate(reset.userId, { $set: { passwordHash: newPasswordHash } }, { new: true });
+  if (!user) throw new ApiError(400, 'This reset link is invalid or expired. Request a new one.');
+  await AuthSession.deleteMany({ userId: user._id });
+  await PasswordReset.deleteMany({ userId: user._id });
+  await recordAudit('auth.password_reset', { id: user._id, email: user.email });
+  res.json({ message: 'Your password has been reset. Sign in with your new password.' });
 });
 export const currentUser = (req, res) => res.json({ user: publicUser(req.user), csrfToken: req.authSession.csrfToken });
 export const adminDashboard = asyncHandler(async (req, res) => {

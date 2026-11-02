@@ -21,4 +21,21 @@ export const emailService = {
       throw new ApiError(503, 'We could not send your verification email. Please try again later.');
     } finally { transport.close(); }
   },
+  async sendPasswordReset(email, link) {
+    if (!env.emailUser || !env.emailPass) throw new ApiError(503, 'Password reset email is temporarily unavailable. Try again later.');
+    const transport = nodemailer.createTransport({
+      host: env.smtpHost, port: env.smtpPort, secure: env.smtpPort === 465,
+      requireTLS: true, auth: { user: env.emailUser, pass: env.emailPass },
+      connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
+    });
+    try {
+      await transport.sendMail({
+        from: { name: 'Frame to Code', address: env.emailUser }, to: email,
+        subject: 'Reset your Frame to Code password',
+        text: `Use this link to reset your password: ${link}\n\nIt expires in 15 minutes and can only be used once. If you did not request a reset, you can ignore this email.`,
+      });
+    } catch {
+      throw new ApiError(503, 'We could not send your password reset email. Please try again later.');
+    } finally { transport.close(); }
+  },
 };

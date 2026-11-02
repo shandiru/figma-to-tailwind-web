@@ -1,5 +1,5 @@
 import { Router, json } from 'express';
-import { register, login, verifyEmail, resendCode, currentUser, logout, adminDashboard } from '../controllers/authController.js';
+import { register, login, verifyEmail, resendCode, currentUser, logout, adminDashboard, requestPasswordReset, completePasswordReset } from '../controllers/authController.js';
 import { authLimit, checkOrigin, requireAuth, requireCsrf, requireSuperAdmin } from '../middleware/auth.js';
 
 const router = Router();
@@ -10,6 +10,8 @@ router.post('/register', authLimit, register);
 router.post('/verify-email', authLimit, verifyEmail);
 router.post('/resend-code', authLimit, resendCode);
 router.post('/login', authLimit, login);
+router.post('/password-reset/request', authLimit, requestPasswordReset);
+router.post('/password-reset/complete', authLimit, completePasswordReset);
 router.get('/me', requireAuth, currentUser);
 router.get('/admin/dashboard', requireAuth, requireSuperAdmin, adminDashboard);
 router.post('/logout', requireAuth, requireCsrf, logout);
