@@ -6,7 +6,7 @@
   "engines": { "node": ">=22.12" },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build --configLoader runner && node scripts/generate-static-pages.mjs",
     "preview": "vite preview",
     "test": "node --test test/*.test.js"
   },

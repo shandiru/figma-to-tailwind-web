@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { authRequest } from '../services/http.js';
 import Brand from '../components/Brand.jsx';
+import { trackEvent } from '../utils/analytics.js';
 
 export default function AuthPage({ onAuthenticated, notice = '', superAdminRegistration = false }) {
   const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || '';
@@ -43,7 +44,9 @@ export default function AuthPage({ onAuthenticated, notice = '', superAdminRegis
         setChallengeId(result.challengeId); setResendAt(Date.now() + result.resendAfter * 1000);
         setPassword(''); setSuperAdminKeyword(''); setMode('verify'); setMessage(result.message);
       } else {
-        const result = await authRequest(mode === 'verify' ? 'verify-email' : 'login', mode === 'verify' ? { challengeId, code } : { email, password });
+        const authMode = mode;
+        const result = await authRequest(authMode === 'verify' ? 'verify-email' : 'login', authMode === 'verify' ? { challengeId, code } : { email, password });
+        trackEvent(authMode === 'verify' ? 'signup' : 'login');
         setPassword(''); setCode(''); onAuthenticated(result.user);
       }
     } catch (failure) { setError(failure.message); }

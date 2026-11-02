@@ -1,6 +1,12 @@
 {
   "headers": [
     {
+      "source": "/app",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
       "source": "/super-admin/:path*",
       "headers": [
         {
@@ -20,10 +26,22 @@
     }
   ],
   "rewrites": [
+    { "source": "/app", "destination": "/app.html" },
+    { "source": "/super-admin/register", "destination": "/app.html" },
     {
       "source": "/api/:path*",
       "destination": "https://figma-to-tailwind-web-nedo.vercel.app/api/:path*"
     },
+    { "source": "/figma-to-tailwind", "destination": "/figma-to-tailwind/index.html" },
+    { "source": "/figma-to-react", "destination": "/figma-to-react/index.html" },
+    { "source": "/figma-to-vue", "destination": "/figma-to-vue/index.html" },
+    { "source": "/figma-to-html", "destination": "/figma-to-html/index.html" },
+    { "source": "/convert-figma-frame-to-code", "destination": "/convert-figma-frame-to-code/index.html" },
+    { "source": "/blog", "destination": "/blog/index.html" },
+    { "source": "/blog/:article", "destination": "/blog/:article/index.html" },
+    { "source": "/privacy", "destination": "/privacy/index.html" },
+    { "source": "/terms", "destination": "/terms/index.html" },
+    { "source": "/contact", "destination": "/contact/index.html" },
     {
       "source": "/(.*)",
       "destination": "/index.html"

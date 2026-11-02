@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { trackEvent } from '../utils/analytics.js';
 
 export default function CodePane({ code, format = 'html', onCopied }) {
   const [wrap, setWrap] = useState(true);
@@ -6,6 +7,7 @@ export default function CodePane({ code, format = 'html', onCopied }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(code);
+      trackEvent('code_copy', { framework: format });
       setError('');
       onCopied();
     } catch { setError('Could not copy automatically. Select the HTML below and copy it manually.'); }

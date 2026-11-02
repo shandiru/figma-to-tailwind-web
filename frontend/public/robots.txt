@@ -1,6 +1,8 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /app
+Disallow: /super-admin/
 Disallow: /super-admin/
 
 Sitemap: https://figma-to-code.imdiru.online/sitemap.xml

@@ -15,6 +15,7 @@ import Brand from '../components/Brand.jsx';
 import { API_BASE } from '../services/http.js';
 import StudioIcon from '../components/StudioIcon.jsx';
 import SuperAdminDashboard from '../components/SuperAdminDashboard.jsx';
+import { trackEvent } from '../utils/analytics.js';
 
 const pluginUrl = `${API_BASE}/plugin`;
 const tabs = ['Design', 'Preview', 'Code', 'Versions', 'History'];
@@ -51,10 +52,11 @@ export default function App({ user = null, onLogout, signingOut = false }) {
     const selectedMobile = Object.hasOwn(selection, 'mobile') ? selection.mobile : mobile;
     const selectedName = selection.pageName || pageName.trim() || 'Untitled page';
     if (!selectedDesktop && !selectedTablet && !selectedMobile) return setError('Upload a Figma JSON file and select a section to build.');
-    setError(''); setLoading(true);
+    setError(''); setLoading(true); trackEvent('convert_start', { framework: exportFormat });
     try {
       const blob = await convertDesigns({ desktop: selectedDesktop, tablet: selectedTablet, mobile: selectedMobile, options: { pageName: selectedName, format: exportFormat } });
       setResult({ blob, ...(await readResult(blob)) });
+      trackEvent('convert_success', { framework: exportFormat });
       setTab('Preview'); setHistoryKey(k => k + 1);
       push('Your editable page is ready', 'success');
     } catch (err) { setError(err.message); }
@@ -64,7 +66,7 @@ export default function App({ user = null, onLogout, signingOut = false }) {
     const anchor = document.createElement('a');
     const url = URL.createObjectURL(result.blob);
     anchor.href = url; anchor.download = `${(pageName || 'page').replace(/\W+/g, '-').toLowerCase()}.zip`;
-    anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    anchor.click(); trackEvent('code_download', { framework: exportFormat }); setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const loadDemo = () => {
     setDesktop(jsonFile(demoDesign())); setTablet(null); setMobile(jsonFile(demoDesign(true)));
