@@ -20,7 +20,7 @@ const pluginUrl = `${API_BASE}/plugin`;
 const tabs = ['Design', 'Preview', 'Code', 'Versions', 'History'];
 const jsonFile = data => new File([JSON.stringify(data)], 'figma-layers.json', { type: 'application/json' });
 
-export default function App({ user = null }) {
+export default function App({ user = null, onLogout, signingOut = false }) {
   const [view, setView] = useState(user?.role === 'superadmin' ? 'admin' : 'workspace');
   const [desktop, setDesktop] = useState(null);
   const [tablet, setTablet] = useState(null);
